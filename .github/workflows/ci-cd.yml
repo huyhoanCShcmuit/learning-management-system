@@ -1,9 +1,14 @@
 name: CI/CD
 
+# Branch -> environment:
+#   development -> "development" (dev server), images tagged :dev
+#   master      -> "production"  (prod server), images tagged :prod and :latest
+# Both branches are protected: changes arrive only through pull requests with green CI.
 on:
   push:
-    branches: [main]
+    branches: [master, development]
   pull_request:
+    branches: [master, development]
   workflow_dispatch:
     inputs:
       deploy_all:
@@ -19,7 +24,8 @@ permissions:
   contents: read
 
 env:
-  REGISTRY: ghcr.io/${{ github.repository_owner }}
+  # Image channel for this branch (only used on push).
+  CHANNEL: ${{ github.ref_name == 'master' && 'prod' || 'dev' }}
 
 jobs:
   changes:
@@ -29,7 +35,7 @@ jobs:
       backend: ${{ steps.f.outputs.backend == 'true' || inputs.deploy_all == true }}
       frontend: ${{ steps.f.outputs.frontend == 'true' || inputs.deploy_all == true }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: f
         uses: dorny/paths-filter@v3
         with:
@@ -66,7 +72,7 @@ jobs:
       POSTGRES_PASSWORD: ci-only-password
       DJANGO_DEBUG: "0"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install system and Python dependencies
         run: |
           apt-get update && apt-get install -y --no-install-recommends libpq5
@@ -89,7 +95,9 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - name: Registry path (GHCR needs lowercase)
+        run: echo "REGISTRY=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@v3
       - if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -103,8 +111,9 @@ jobs:
           file: docker/web.Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ env.REGISTRY }}/lms-web:latest
+            ${{ env.REGISTRY }}/lms-web:${{ env.CHANNEL }}
             ${{ env.REGISTRY }}/lms-web:${{ github.sha }}
+            ${{ github.ref_name == 'master' && format('{0}/lms-web:latest', env.REGISTRY) || '' }}
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
@@ -118,7 +127,9 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - name: Registry path (GHCR needs lowercase)
+        run: echo "REGISTRY=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@v3
       - if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -132,25 +143,32 @@ jobs:
           file: docker/proxy.Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ env.REGISTRY }}/lms-proxy:latest
+            ${{ env.REGISTRY }}/lms-proxy:${{ env.CHANNEL }}
             ${{ env.REGISTRY }}/lms-proxy:${{ github.sha }}
+            ${{ github.ref_name == 'master' && format('{0}/lms-proxy:latest', env.REGISTRY) || '' }}
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=proxy
           cache-to: type=gha,mode=max,scope=proxy
 
   deploy:
-    name: Deploy to server
+    name: Deploy (${{ github.ref_name == 'master' && 'production' || 'development' }})
     needs: [changes, build-web, build-proxy]
-    # Runs only on main, only when a server is configured (repository variable DEPLOY_ENABLED=true),
-    # and only if no build failed. Skipped builds (part not changed) are fine.
+    # Push to master/development only, and only if no build failed (a skipped build = part unchanged).
     if: >-
-      always() && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true' &&
+      always() && github.event_name != 'pull_request' &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
       (needs.build-web.result == 'success' || needs.build-proxy.result == 'success')
     runs-on: ubuntu-latest
-    environment: production
+    # Each environment has its own server secrets/variables (Settings -> Environments).
+    environment: ${{ github.ref_name == 'master' && 'production' || 'development' }}
     steps:
+      - name: Check that this environment has a server
+        id: cfg
+        run: |
+          if [ "${{ vars.DEPLOY_ENABLED }}" = "true" ]; then echo "on=true" >> "$GITHUB_OUTPUT";
+          else echo "::notice::Deploy skipped: set variable DEPLOY_ENABLED=true in environment '${{ github.ref_name == 'master' && 'production' || 'development' }}'"; fi
       - name: Configure SSH
+        if: steps.cfg.outputs.on == 'true'
         env:
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -159,6 +177,7 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
       - name: Pull and restart only what changed
+        if: steps.cfg.outputs.on == 'true'
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}

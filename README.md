@@ -1,7 +1,7 @@
 # Learning Management System
 
 Hệ thống quản lý học tập và nộp bài trực tuyến theo khoá học, kiểu Moodle thu gọn.
-Django 5.2 + PostgreSQL, chạy bằng Docker, có CI/CD bằng GitHub Actions.
+Django 5.2 + PostgreSQL, chạy bằng Docker, CI/CD bằng GitHub Actions với hai môi trường dev và prod.
 
 ## Tính năng
 
@@ -90,42 +90,63 @@ scripts/pull_cloud_db.sh      # pg_dump từ cloud → backups/cloud_*.dump → 
 
 URL cloud chỉ nằm trong `secrets/` (không commit, không hiện trên dòng lệnh).
 
-## CI/CD (GitHub Actions)
+## Nhánh, môi trường và CI/CD
 
-File `.github/workflows/ci-cd.yml`:
+| Nhánh | Môi trường | Image | Ghi chú |
+|---|---|---|---|
+| `development` | **development** (máy chủ dev) | `lms-web:dev`, `lms-proxy:dev` | được bảo vệ |
+| `master` | **production** (máy chủ prod) | `:prod` và `:latest` | được bảo vệ |
+
+Cả hai nhánh **không push thẳng được**: mọi thay đổi phải qua Pull Request, CI (`Tests (PostgreSQL)`)
+phải xanh mới merge được; không force-push, không xoá nhánh.
+
+Quy trình làm việc:
+
+```bash
+git switch development && git pull
+git switch -c feature/ten-tinh-nang      # làm việc trên nhánh riêng
+git push -u origin feature/ten-tinh-nang # mở PR vào development → merge → tự deploy lên dev
+# khi dev ổn: mở PR development → master → merge → tự deploy lên prod
+```
+
+Workflow `.github/workflows/ci-cd.yml`:
 
 | Sự kiện | Việc chạy |
 |---|---|
-| Mọi PR và push | Test trên PostgreSQL thật, kiểm tra migration còn thiếu |
-| PR | Build thử image phần bị sửa (không đẩy lên) |
-| Push vào `main` | Build và đẩy image lên GitHub Container Registry (`lms-web`, `lms-proxy`, tag `latest` và mã commit) |
-| Push vào `main` + đã cấu hình máy chủ | SSH vào máy chủ, `docker compose pull` và khởi động lại **chỉ phần đã đổi** |
+| PR vào `development`/`master` | Test trên PostgreSQL thật, kiểm tra migration, build thử image phần bị sửa |
+| Merge vào `development` | Build và đẩy image `:dev` lên GHCR, deploy lên máy chủ dev |
+| Merge vào `master` | Build và đẩy image `:prod`, deploy lên máy chủ prod |
 | Chạy tay (Run workflow) | Tuỳ chọn build và deploy cả hai phần |
 
-### Bật deploy tự động
+Chỉ phần bị sửa mới được build và khởi động lại: sửa `courses/static/**` → chỉ `proxy`;
+sửa code Python/template → chỉ `web`.
 
-Trên máy chủ (bất kỳ VPS hay VM nào có Docker):
+### Cấu hình máy chủ cho từng môi trường
+
+Trên mỗi máy chủ (VPS/VM có Docker), lần đầu:
 
 ```bash
 git clone https://github.com/huyhoanCShcmuit/learning-management-system.git /opt/lms
-cd /opt/lms && ./setup.sh        # lần đầu: tạo .env, secrets/, admin
+cd /opt/lms && ./setup.sh
+# máy dev: đặt TAG=dev trong .env; máy prod: TAG=prod
 ```
 
-Trên GitHub, mục **Settings → Secrets and variables → Actions**:
+Trên GitHub, **Settings → Environments → `development`** (và tương tự cho **`production`**):
 
 | Loại | Tên | Giá trị |
 |---|---|---|
 | Variable | `DEPLOY_ENABLED` | `true` |
 | Variable | `DEPLOY_PATH` | `/opt/lms` (mặc định) |
-| Secret | `DEPLOY_HOST` | địa chỉ máy chủ |
+| Secret | `DEPLOY_HOST` | địa chỉ máy chủ của môi trường đó |
 | Secret | `DEPLOY_USER` | user SSH (thuộc nhóm `docker`) |
 | Secret | `DEPLOY_SSH_KEY` | private key dành riêng cho deploy |
 | Secret | `DEPLOY_KNOWN_HOSTS` | kết quả `ssh-keyscan <host>` |
 
-Tạo thêm environment `production` (mục Environments) nếu muốn mỗi lần deploy phải có người duyệt.
+Chưa cấu hình thì bước deploy chỉ ghi chú "Deploy skipped", build vẫn chạy bình thường.
+Có thể bật "Required reviewers" cho `production` để mỗi lần lên prod phải có người duyệt.
 Nếu package trên GHCR để private, máy chủ cần `docker login ghcr.io` một lần bằng token có quyền `read:packages`.
 
-Quay lại bản cũ: `TAG=<mã commit cũ> docker compose up -d web` trên máy chủ.
+Quay lại bản cũ trên máy chủ: `TAG=<mã commit cũ> docker compose up -d web proxy`.
 
 ## Bảo mật
 
