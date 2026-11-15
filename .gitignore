@@ -27,3 +27,8 @@ secret_key
 .vscode/
 *.swp
 *.log
+
+# Local secrets and database backups (never commit)
+secrets/
+backups/
+*.dump

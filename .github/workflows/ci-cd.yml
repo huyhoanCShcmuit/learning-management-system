@@ -1,0 +1,175 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      deploy_all:
+        description: "Build and deploy both web and proxy"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  changes:
+    name: Detect changed parts
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.f.outputs.backend == 'true' || inputs.deploy_all == true }}
+      frontend: ${{ steps.f.outputs.frontend == 'true' || inputs.deploy_all == true }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: f
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'courses/static/**'
+              - 'docker/Caddyfile'
+              - 'docker/proxy.Dockerfile'
+            backend:
+              - '**/*.py'
+              - '**/templates/**'
+              - 'requirements.txt'
+              - 'docker/web.Dockerfile'
+              - 'docker/entrypoint.sh'
+
+  test:
+    name: Tests (PostgreSQL)
+    runs-on: ubuntu-latest
+    container: python:3.15-slim
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: lms
+          POSTGRES_USER: lms
+          POSTGRES_PASSWORD: ci-only-password
+        options: >-
+          --health-cmd "pg_isready -U lms -d lms"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: lms
+      POSTGRES_USER: lms
+      POSTGRES_PASSWORD: ci-only-password
+      DJANGO_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system and Python dependencies
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends libpq5
+          pip install -r requirements.txt
+      - name: Random secret key for this run
+        run: echo "DJANGO_SECRET_KEY=$(python -c 'import secrets;print(secrets.token_urlsafe(50))')" >> "$GITHUB_ENV"
+      - name: No missing migrations
+        run: python manage.py makemigrations --check --dry-run
+      - name: Django system checks
+        run: python manage.py check
+      - name: Unit tests
+        run: python manage.py test courses
+
+  build-web:
+    name: Build backend image (web)
+    needs: [changes, test]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/web.Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/lms-web:latest
+            ${{ env.REGISTRY }}/lms-web:${{ github.sha }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  build-proxy:
+    name: Build frontend image (proxy + static)
+    needs: [changes, test]
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/proxy.Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/lms-proxy:latest
+            ${{ env.REGISTRY }}/lms-proxy:${{ github.sha }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=proxy
+          cache-to: type=gha,mode=max,scope=proxy
+
+  deploy:
+    name: Deploy to server
+    needs: [changes, build-web, build-proxy]
+    # Runs only on main, only when a server is configured (repository variable DEPLOY_ENABLED=true),
+    # and only if no build failed. Skipped builds (part not changed) are fine.
+    if: >-
+      always() && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true' &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
+      (needs.build-web.result == 'success' || needs.build-proxy.result == 'success')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Pull and restart only what changed
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          DIR: ${{ vars.DEPLOY_PATH || '/opt/lms' }}
+          SHA: ${{ github.sha }}
+          WEB: ${{ needs.build-web.result == 'success' }}
+          PROXY: ${{ needs.build-proxy.result == 'success' }}
+        run: |
+          services=""
+          [ "$WEB" = "true" ] && services="$services web"
+          [ "$PROXY" = "true" ] && services="$services proxy"
+          echo "Deploying:$services @ $SHA"
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "cd '$DIR' && export TAG='$SHA' && docker compose pull $services && docker compose up -d --no-deps $services && docker image prune -f"

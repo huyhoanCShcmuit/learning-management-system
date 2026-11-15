@@ -20,8 +20,17 @@
 		Referrer-Policy same-origin
 	}
 
-	reverse_proxy web:8000 {
-		header_up -X-Forwarded-Host
+	# Static assets are baked into this image (frontend), never hit Django.
+	handle_path /static/* {
+		root * /srv/static
+		header Cache-Control "public, max-age=3600"
+		file_server
+	}
+
+	handle {
+		reverse_proxy web:8000 {
+			header_up -X-Forwarded-Host
+		}
 	}
 
 	log {

@@ -1,7 +1,7 @@
 # Learning Management System
 
 Hệ thống quản lý học tập và nộp bài trực tuyến theo khoá học, kiểu Moodle thu gọn.
-Viết bằng Django 5.2, chạy bằng Docker sau reverse proxy Caddy.
+Django 5.2 + PostgreSQL, chạy bằng Docker, có CI/CD bằng GitHub Actions.
 
 ## Tính năng
 
@@ -18,16 +18,34 @@ Viết bằng Django 5.2, chạy bằng Docker sau reverse proxy Caddy.
 
 **Quản trị**
 - Trang quản trị Django đã chỉnh giao diện cho khớp với trang chính.
-- **Nhập người dùng từ Excel/CSV**: xem trước từng dòng (tạo mới / đã có / lỗi), tự sinh mật khẩu tạm hiện một lần,
+- **Nhập người dùng từ Excel/CSV**: xem trước từng dòng, tự sinh mật khẩu tạm hiện một lần,
   người dùng bắt buộc đổi mật khẩu khi đăng nhập lần đầu.
 
-**Chung**
-- Trang cá nhân, cài đặt tài khoản, đổi mật khẩu, trang trợ giúp và quyền riêng tư.
-- Giao diện tiếng Việt, hỗ trợ chế độ tối và điện thoại.
+## Kiến trúc
 
-## Bắt đầu nhanh (Docker)
+```
+              Internet
+                 │ 80/443
+        ┌────────▼────────┐   image: lms-proxy
+        │  proxy (Caddy)  │   HTTPS, giới hạn upload, phục vụ /static/ (CSS, JS, icon)
+        └────────┬────────┘
+     mạng "edge" │
+        ┌────────▼────────┐   image: lms-web
+        │  web (Django)   │   logic, giao diện (template), file nộp trong volume lms_data
+        └────────┬────────┘
+  mạng "backend" │ (internal: không ra Internet, không mở cổng)
+        ┌────────▼────────┐   postgres:18-alpine, volume pg_data
+        │  db (Postgres)  │   hoặc thay bằng cloud DB (RDS, Cloud SQL, Neon…)
+        └─────────────────┘
+```
 
-Cần [Docker](https://docs.docker.com/get-docker/) với Docker Compose.
+- Sửa **CSS/JS/icon** (`courses/static/`) → chỉ build và deploy lại `proxy`.
+- Sửa **code Python hoặc template** → test, rồi build và deploy lại `web`.
+- Database tách riêng: cập nhật hay khởi động lại app không đụng vào dữ liệu.
+
+## Bắt đầu nhanh (máy cá nhân)
+
+Cần Docker với Docker Compose.
 
 ```bash
 git clone https://github.com/huyhoanCShcmuit/learning-management-system.git
@@ -35,42 +53,96 @@ cd learning-management-system
 ./setup.sh
 ```
 
-Lần chạy đầu, `setup.sh` sẽ:
-1. tạo file `.env` (chỉ chứa cấu hình, không có mật khẩu hay khoá bí mật);
-2. build và chạy các container;
-3. hỏi bạn tạo tài khoản quản trị ngay trong terminal.
+Lần đầu, `setup.sh` tạo `.env` (chỉ cấu hình), thư mục `secrets/` (mật khẩu database ngẫu nhiên),
+build 3 container và hỏi bạn tạo tài khoản quản trị. Mở http://localhost:8000.
+Đường dẫn trang quản trị nằm ở dòng `ADMIN_URL` trong `.env`.
 
-Sau đó mở http://localhost:8000. Đường dẫn trang quản trị nằm ở dòng `ADMIN_URL` trong `.env`.
-
-Muốn có dữ liệu mẫu để thử, đặt `SEED_DEMO=1` trong `.env` rồi chạy lại `./setup.sh`.
-Các tài khoản mẫu `admin`, `gv1`, `hs1`, `hs2`, `hs3` dùng mật khẩu `demo1234`. **Không bật trên máy thật.**
+Muốn có dữ liệu mẫu: đặt `SEED_DEMO=1` trong `.env` rồi chạy lại `./setup.sh`
+(tài khoản `admin`, `gv1`, `hs1`… mật khẩu `demo1234`). **Không bật trên máy thật.**
 
 ### Lệnh thường dùng
 
 ```bash
-docker compose logs -f                                         # xem log
-docker compose down                                            # dừng (giữ dữ liệu)
-docker compose exec web python manage.py createsuperuser       # tạo thêm admin
-docker compose exec web python manage.py changepassword admin  # đổi mật khẩu admin
-docker compose run --rm --no-deps web python manage.py test courses   # chạy test
+docker compose ps                                              # trạng thái 3 container
+docker compose logs -f web                                     # log backend
+docker compose exec web python manage.py createsuperuser       # tạo admin
+docker compose exec web python manage.py changepassword admin  # đổi mật khẩu
+scripts/backup.sh                                              # sao lưu DB + file nộp vào backups/
+scripts/restore.sh backups/db_XXXX.dump                        # khôi phục DB
 ```
 
-`docker compose down -v` sẽ **xoá luôn toàn bộ dữ liệu** (database và file nộp).
+`docker compose down -v` sẽ **xoá luôn toàn bộ dữ liệu**.
 
-### Chạy với domain thật (HTTPS)
+## Database
 
-Trong `.env`, đặt:
+| Chế độ | Cấu hình |
+|---|---|
+| Container `db` (mặc định) | `COMPOSE_PROFILES=localdb` trong `.env`; mật khẩu ở `secrets/db_password` |
+| Cloud DB | Ghi URL vào `secrets/database_url` (ví dụ `postgres://user:pass@host:5432/lms?sslmode=require`), đặt `COMPOSE_PROFILES=` (rỗng) rồi `docker compose up -d` |
+| Phát triển không Docker | Không đặt gì → SQLite |
 
+**Kéo dữ liệu cloud về container ở máy** (để thử nghiệm, debug):
+
+```bash
+echo 'postgres://user:pass@host:5432/lms?sslmode=require' > secrets/cloud_database_url
+scripts/pull_cloud_db.sh      # pg_dump từ cloud → backups/cloud_*.dump → nạp vào container db
 ```
-SITE_ADDRESS=lms.example.com
-DJANGO_ALLOWED_HOSTS=lms.example.com
-DJANGO_CSRF_TRUSTED_ORIGINS=https://lms.example.com
-HTTPS=1
-HTTP_PORT=80
-HTTPS_PORT=443
+
+URL cloud chỉ nằm trong `secrets/` (không commit, không hiện trên dòng lệnh).
+
+## CI/CD (GitHub Actions)
+
+File `.github/workflows/ci-cd.yml`:
+
+| Sự kiện | Việc chạy |
+|---|---|
+| Mọi PR và push | Test trên PostgreSQL thật, kiểm tra migration còn thiếu |
+| PR | Build thử image phần bị sửa (không đẩy lên) |
+| Push vào `main` | Build và đẩy image lên GitHub Container Registry (`lms-web`, `lms-proxy`, tag `latest` và mã commit) |
+| Push vào `main` + đã cấu hình máy chủ | SSH vào máy chủ, `docker compose pull` và khởi động lại **chỉ phần đã đổi** |
+| Chạy tay (Run workflow) | Tuỳ chọn build và deploy cả hai phần |
+
+### Bật deploy tự động
+
+Trên máy chủ (bất kỳ VPS hay VM nào có Docker):
+
+```bash
+git clone https://github.com/huyhoanCShcmuit/learning-management-system.git /opt/lms
+cd /opt/lms && ./setup.sh        # lần đầu: tạo .env, secrets/, admin
 ```
 
-Caddy sẽ tự lấy chứng chỉ Let's Encrypt. Khi `HTTPS=1`, Django bật HSTS và cookie chỉ gửi qua HTTPS.
+Trên GitHub, mục **Settings → Secrets and variables → Actions**:
+
+| Loại | Tên | Giá trị |
+|---|---|---|
+| Variable | `DEPLOY_ENABLED` | `true` |
+| Variable | `DEPLOY_PATH` | `/opt/lms` (mặc định) |
+| Secret | `DEPLOY_HOST` | địa chỉ máy chủ |
+| Secret | `DEPLOY_USER` | user SSH (thuộc nhóm `docker`) |
+| Secret | `DEPLOY_SSH_KEY` | private key dành riêng cho deploy |
+| Secret | `DEPLOY_KNOWN_HOSTS` | kết quả `ssh-keyscan <host>` |
+
+Tạo thêm environment `production` (mục Environments) nếu muốn mỗi lần deploy phải có người duyệt.
+Nếu package trên GHCR để private, máy chủ cần `docker login ghcr.io` một lần bằng token có quyền `read:packages`.
+
+Quay lại bản cũ: `TAG=<mã commit cũ> docker compose up -d web` trên máy chủ.
+
+## Bảo mật
+
+| Thứ | Lưu ở đâu |
+|---|---|
+| Mật khẩu người dùng | Database, chỉ dạng hash Argon2 |
+| Mật khẩu database, URL cloud DB | `secrets/` (quyền 700, không commit), nạp vào container dạng Docker secret |
+| Secret key của Django | File trong volume `lms_data`, tự sinh |
+| `.env` | Chỉ cấu hình, không chứa bí mật, không commit |
+
+Các lớp bảo vệ khác:
+- Phân quyền theo vai trò trong từng khoá; học viên chỉ xem và tải bài của chính mình.
+- File nộp: kiểm tra nội dung thật theo đuôi, chặn file thực thi, lưu bằng tên ngẫu nhiên, luôn tải về dạng đính kèm.
+- Content-Security-Policy không cho script inline, chặn nhúng iframe, cookie `HttpOnly` và `SameSite`.
+- Database ở mạng nội bộ, không mở cổng. Container chạy user không phải root, bỏ hết quyền đặc biệt,
+  backend có hệ thống file chỉ đọc. Proxy giới hạn 60 MB mỗi request.
+- Khi chạy với domain thật và `HTTPS=1`: chứng chỉ Let's Encrypt tự động, HSTS, cookie chỉ qua HTTPS.
 
 ## Phát triển không dùng Docker
 
@@ -80,52 +152,19 @@ Cần Python 3.10 trở lên.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python manage.py migrate
-.venv/bin/python manage.py seed_demo      # dữ liệu mẫu
-.venv/bin/python manage.py runserver
+.venv/bin/python manage.py seed_demo
+.venv/bin/python manage.py runserver      # http://127.0.0.1:8000, admin ở /admin/
 ```
-
-Mở http://127.0.0.1:8000. Ở chế độ này trang quản trị nằm ở `/admin/`.
-
-## Bảo mật
-
-| Thứ | Lưu ở đâu |
-|---|---|
-| Mật khẩu người dùng | Database, chỉ dạng hash Argon2 |
-| Secret key của Django | File `/data/secret_key` trong volume dữ liệu, tự sinh, quyền 600 |
-| `.env` | Chỉ cấu hình: domain, cổng, đường dẫn admin. Không commit lên git |
-
-Các lớp bảo vệ khác:
-- Phân quyền theo vai trò trong từng khoá; học viên chỉ xem và tải bài của chính mình.
-- File nộp: kiểm tra nội dung thật theo đuôi (đổi tên `.exe` thành `.pdf` sẽ bị từ chối), chặn file thực thi,
-  lưu bằng tên ngẫu nhiên, luôn tải về dạng đính kèm.
-- Content-Security-Policy không cho script inline, chặn nhúng iframe, cookie `HttpOnly` và `SameSite`.
-- Đường dẫn trang quản trị khó đoán; mật khẩu tối thiểu 10 ký tự.
-- Container chạy với user không phải root, hệ thống file chỉ đọc, bỏ hết quyền đặc biệt;
-  app không mở cổng ra ngoài, chỉ Caddy nhận request (giới hạn 60 MB mỗi request).
 
 ## Cấu trúc thư mục
 
 ```
-config/              cấu hình Django (settings, urls)
-courses/
-  models.py          Course, Enrollment, Assignment, Submission, AccountFlag
-  views.py           trang chủ, lịch, khoá học, bài tập, nộp bài, chấm điểm
-  views_course.py    thành viên, bảng điểm, tiến độ học viên
-  views_account.py   trang cá nhân, cài đặt
-  views_manage.py    nhập người dùng
-  importer.py        đọc và kiểm tra file Excel/CSV
-  security.py        CSP, kiểm tra nội dung file, bắt buộc đổi mật khẩu
-  templates/         giao diện các trang
-  static/courses/    CSS, JS, favicon
-  tests.py           test tự động
-templates/           trang đăng nhập, lỗi 403/404/500, trợ giúp, admin
-docker/              Caddyfile, entrypoint
-Dockerfile, docker-compose.yml, setup.sh
+config/                 cấu hình Django
+courses/                app chính: models, views, templates, static, tests
+templates/              đăng nhập, trang lỗi, trợ giúp, nhập người dùng, override admin
+docker/                 web.Dockerfile, proxy.Dockerfile, Caddyfile, entrypoint
+scripts/                backup, restore, kéo dữ liệu từ cloud
+.github/workflows/      CI/CD
+docker-compose.yml      3 container: proxy, web, db
+setup.sh                khởi tạo lần đầu
 ```
-
-## Quy tắc nộp bài
-
-- Chỉ học viên đã ghi danh vào khoá mới nộp được.
-- Nộp được từ giờ mở đến giờ đóng (nếu không đặt giờ đóng thì là hạn nộp).
-- Nộp sau hạn nhưng trước giờ đóng bị đánh dấu **trễ**. Thời gian lấy theo đồng hồ máy chủ.
-- Mỗi lần nộp là một bản ghi mới, không ghi đè; tối đa theo số lần giáo viên đặt.

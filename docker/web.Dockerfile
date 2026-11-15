@@ -1,3 +1,4 @@
+# Backend: Django + gunicorn. Rebuilt when Python code or templates change.
 FROM python:3.15-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -8,13 +9,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# libpq for psycopg (PostgreSQL driver)
+RUN apt-get update && apt-get install -y --no-install-recommends libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY . .
-RUN DJANGO_SECRET_KEY=build python manage.py collectstatic --noinput \
-    && useradd --create-home --uid 1000 app \
-    && mkdir -p /data && chown -R app:app /data /app \
+RUN useradd --create-home --uid 1000 app \
+    && mkdir -p /data && chown -R app:app /data \
     && chmod +x docker/entrypoint.sh
 
 USER app

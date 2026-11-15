@@ -1,42 +1,27 @@
-# One command: docker compose up -d --build
-# Settings and secrets come from .env (created by ./setup.sh, never committed).
+# Three containers:
+#   proxy  – Caddy + static assets (frontend edge, HTTPS)      image: lms-proxy
+#   web    – Django backend                                    image: lms-web
+#   db     – PostgreSQL (profile "localdb"; skip it when using a cloud DB)
+#
+# Local:      ./setup.sh               (builds images, creates secrets)
+# Server:     docker compose pull && docker compose up -d   (images from GHCR)
+# Cloud DB:   put the URL in secrets/database_url and set COMPOSE_PROFILES= in .env
 
 x-hardening: &hardening
   restart: unless-stopped
   security_opt:
     - no-new-privileges:true
-  cap_drop:
-    - ALL
 
 services:
-  web:
+  proxy:
     <<: *hardening
-    build: .
-    image: lms:latest
-    container_name: lms-web
-    env_file: .env
-    environment:
-      BEHIND_PROXY: "1"
-    expose:
-      - "8000"          # only reachable by Caddy, not from the host
-    read_only: true     # app code cannot be modified at runtime
-    tmpfs:
-      - /tmp
-    volumes:
-      - lms_data:/data  # SQLite DB, uploaded files, secret key
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/login/', timeout=3).status == 200 else 1)"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-
-  caddy:
-    <<: *hardening
-    image: caddy:2.10-alpine
-    container_name: lms-caddy
-    cap_add:
-      - NET_BIND_SERVICE
+    image: ${REGISTRY:-ghcr.io/huyhoancshcmuit}/lms-proxy:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/proxy.Dockerfile
+    container_name: lms-proxy
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
     env_file: .env
     depends_on:
       web:
@@ -45,11 +30,77 @@ services:
       - "${HTTP_PORT:-8000}:80"
       - "${HTTPS_PORT:-8443}:443"
     volumes:
-      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks: [edge]
+
+  web:
+    <<: *hardening
+    image: ${REGISTRY:-ghcr.io/huyhoancshcmuit}/lms-web:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    container_name: lms-web
+    cap_drop: [ALL]
+    env_file: .env
+    environment:
+      BEHIND_PROXY: "1"
+      POSTGRES_HOST: db
+      POSTGRES_DB: lms
+      POSTGRES_USER: lms
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      DATABASE_URL_FILE: /run/secrets/database_url   # empty file = use the db container
+    secrets: [db_password, database_url]
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false            # not started when using a cloud DB
+    expose: ["8000"]
+    read_only: true
+    tmpfs: [/tmp]
+    volumes:
+      - lms_data:/data             # uploaded files, secret key
+    networks: [edge, backend]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/login/', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  db:
+    <<: *hardening
+    image: postgres:18-alpine
+    container_name: lms-db
+    profiles: [localdb]
+    environment:
+      POSTGRES_DB: lms
+      POSTGRES_USER: lms
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes:
+      - pg_data:/var/lib/postgresql
+    networks: [backend]            # internal only: no ports, no internet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lms -d lms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    shm_size: 128mb
+
+networks:
+  edge: {}
+  backend:
+    internal: true
+
+secrets:
+  db_password:
+    file: ./secrets/db_password
+  database_url:
+    file: ./secrets/database_url
 
 volumes:
   lms_data:
+  pg_data:
   caddy_data:
   caddy_config:

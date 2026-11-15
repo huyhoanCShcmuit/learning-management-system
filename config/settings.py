@@ -53,7 +53,6 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'courses.security.ContentSecurityPolicyMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -133,12 +132,48 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': DATA_DIR / 'db.sqlite3',
-    }
-}
+def _read_secret(name):
+    """Value of NAME, or the contents of the file named by NAME_FILE (Docker secrets)."""
+    path = os.environ.get(f'{name}_FILE')
+    if path and Path(path).is_file():
+        return Path(path).read_text().strip()
+    return os.environ.get(name, '')
+
+
+def _database():
+    """DATABASE_URL (cloud DB) > POSTGRES_* (compose db container) > SQLite (dev/tests)."""
+    from urllib.parse import parse_qsl, unquote, urlsplit
+    url = _read_secret('DATABASE_URL')
+    if url:
+        u = urlsplit(url)
+        if u.scheme not in ('postgres', 'postgresql'):
+            raise RuntimeError('DATABASE_URL must start with postgres://')
+        return {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': u.path.lstrip('/'),
+            'USER': unquote(u.username or ''),
+            'PASSWORD': unquote(u.password or ''),
+            'HOST': u.hostname or '',
+            'PORT': str(u.port or 5432),
+            'OPTIONS': dict(parse_qsl(u.query)),  # e.g. ?sslmode=require for cloud DBs
+            'CONN_MAX_AGE': 60,
+            'CONN_HEALTH_CHECKS': True,
+        }
+    if os.environ.get('POSTGRES_HOST'):
+        return {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('POSTGRES_DB', 'lms'),
+            'USER': os.environ.get('POSTGRES_USER', 'lms'),
+            'PASSWORD': _read_secret('POSTGRES_PASSWORD'),
+            'HOST': os.environ['POSTGRES_HOST'],
+            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+            'CONN_MAX_AGE': 60,
+            'CONN_HEALTH_CHECKS': True,
+        }
+    return {'ENGINE': 'django.db.backends.sqlite3', 'NAME': DATA_DIR / 'db.sqlite3'}
+
+
+DATABASES = {'default': _database()}
 
 
 # Password validation
@@ -180,8 +215,9 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STORAGES = {
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
-    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage' if DEBUG
-                    else 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+    # Plain names (no content hash): the proxy image serves /static/, so CSS/JS can be
+    # redeployed on their own without rebuilding the backend.
+    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
 }
 
 # Default primary key field type
