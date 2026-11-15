@@ -15,6 +15,7 @@ urlpatterns = [
     path('courses/<int:pk>/members/<int:user_id>/', views_course.member_progress, name='member_progress'),
     path('courses/<int:pk>/grades/', views_course.gradebook, name='gradebook'),
     path('assignments/<int:pk>/', views.assignment_detail, name='assignment_detail'),
+    path('assignments/<int:pk>/edit/', views.assignment_edit, name='assignment_edit'),
     path('assignments/<int:pk>/export.csv', views.export_csv, name='export_csv'),
     path('submissions/<int:pk>/grade/', views.grade, name='grade'),
     path('submissions/<int:pk>/download/', views.download, name='download'),

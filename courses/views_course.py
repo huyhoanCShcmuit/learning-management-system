@@ -24,7 +24,7 @@ def _latest_submissions(course):
     """{(assignment_id, student_id): newest Submission} for a course."""
     latest = {}
     for s in (Submission.objects.filter(assignment__course=course)
-              .only('id', 'assignment_id', 'student_id', 'score', 'is_late', 'submitted_at', 'attempt_no')
+              .only('id', 'assignment_id', 'student_id', 'score', 'is_late', 'submitted_at', 'graded_at')
               .order_by('-submitted_at')):
         latest.setdefault((s.assignment_id, s.student_id), s)
     return latest

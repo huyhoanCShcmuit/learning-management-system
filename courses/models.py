@@ -54,10 +54,10 @@ class Assignment(models.Model):
     open_at = models.DateTimeField('Mở nộp', default=timezone.now)
     due_at = models.DateTimeField('Hạn nộp')
     cutoff_at = models.DateTimeField(
-        'Khoá nộp', null=True, blank=True,
-        help_text='Sau hạn nộp vẫn nhận bài trễ đến mốc này. Để trống = không nhận bài trễ.',
+        'Khoá bài', null=True, blank=True,
+        help_text='Sau hạn nộp vẫn cho nộp và sửa bài (đánh dấu trễ) đến mốc này. '
+                  'Sau mốc này bài bị khoá: không nộp, không sửa. Để trống = khoá ngay khi hết hạn nộp.',
     )
-    max_attempts = models.PositiveIntegerField('Số lần nộp tối đa', default=3)
     allowed_ext = models.CharField(
         'Đuôi file cho phép', max_length=300, blank=True, default='',
         help_text='Để trống = nhận mọi định dạng (trừ file thực thi). '
@@ -112,10 +112,10 @@ def submission_path(instance, filename):
 class Submission(models.Model):
     assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
     student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    attempt_no = models.PositiveIntegerField('Lần nộp')
     file = models.FileField(upload_to=submission_path)
     original_name = models.CharField(max_length=255)
-    submitted_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField('Nộp lần đầu', default=timezone.now)
+    submitted_at = models.DateTimeField('Cập nhật lần cuối', default=timezone.now)
     is_late = models.BooleanField('Trễ hạn', default=False)
 
     score = models.DecimalField('Điểm', max_digits=5, decimal_places=2, null=True, blank=True)
@@ -128,12 +128,17 @@ class Submission(models.Model):
 
     class Meta:
         ordering = ['-submitted_at']
-        unique_together = ('assignment', 'student', 'attempt_no')
+        # One submission per student per assignment; it can be replaced while the assignment is open.
+        constraints = [models.UniqueConstraint(fields=['assignment', 'student'], name='one_submission_per_student')]
         verbose_name = 'Bài nộp'
         verbose_name_plural = 'Bài nộp'
 
     def __str__(self):
-        return f'{self.student} - {self.assignment} (lần {self.attempt_no})'
+        return f'{self.student} - {self.assignment}'
+
+    @property
+    def edited_after_grading(self):
+        return bool(self.graded_at and self.submitted_at > self.graded_at)
 
 
 class AccountFlag(models.Model):

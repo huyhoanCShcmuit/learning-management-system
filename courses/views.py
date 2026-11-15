@@ -166,6 +166,26 @@ def assignment_create(request, course_pk):
 
 
 @login_required
+def assignment_edit(request, pk):
+    """Teacher edits an assignment, e.g. moves the due date or the lock time."""
+    a = get_object_or_404(Assignment.objects.select_related('course'), pk=pk)
+    require_role(request.user, a.course, Enrollment.TEACHER)
+    form = AssignmentForm(request.POST or None, instance=a)
+    if request.method == 'POST' and form.is_valid():
+        a = form.save()
+        # Late flags follow the (possibly moved) due date.
+        for s in a.submissions.all():
+            late = s.submitted_at > a.due_at
+            if s.is_late != late:
+                s.is_late = late
+                s.save(update_fields=['is_late'])
+        log.info('assignment edit by=%s assignment=%s', request.user.pk, a.pk)
+        messages.success(request, 'Đã lưu bài tập.')
+        return redirect('assignment_detail', pk=a.pk)
+    return render(request, 'courses/assignment_form.html', {'form': form, 'course': a.course, 'a': a})
+
+
+@login_required
 def assignment_detail(request, pk):
     a = get_object_or_404(Assignment.objects.select_related('course'), pk=pk)
     role = require_role(request.user, a.course)
@@ -175,39 +195,49 @@ def assignment_detail(request, pk):
 
 
 def _student_view(request, a):
+    """One submission per student: submit it, or replace its file, until the lock time."""
     user = request.user
-    history = a.submissions.filter(student=user)
+    sub = a.submissions.filter(student=user).first()
     status = a.status()
-    can_submit = status in ('open', 'late') and history.count() < a.max_attempts
+    can_edit = status in ('open', 'late')
     form = SubmissionForm(assignment=a)
 
     if request.method == 'POST':
-        if not can_submit:
-            messages.error(request, 'Không thể nộp: bài đã khoá hoặc hết lượt nộp.')
+        if not can_edit:
+            messages.error(request, 'Bài tập đã khoá, không thể nộp hoặc sửa bài.'
+                           if status == 'closed' else 'Bài tập chưa mở.')
             return redirect('assignment_detail', pk=a.pk)
         form = SubmissionForm(request.POST, request.FILES, assignment=a)
         if form.is_valid():
             f = form.cleaned_data['file']
             now = timezone.now()  # server time is the source of truth
+            old_file = None
             try:
                 with transaction.atomic():
-                    attempt = history.count() + 1
-                    Submission.objects.create(
-                        assignment=a, student=user, attempt_no=attempt,
-                        file=f, original_name=safe_display_name(f.name),
-                        submitted_at=now, is_late=now > a.due_at,
-                    )
+                    sub = (Submission.objects.select_for_update()
+                           .filter(assignment=a, student=user).first())
+                    if sub is None:
+                        sub = Submission(assignment=a, student=user, created_at=now)
+                        action = 'Đã nộp bài.'
+                    else:
+                        old_file = sub.file.name
+                        action = 'Đã cập nhật bài nộp.'
+                    sub.file = f
+                    sub.original_name = safe_display_name(f.name)
+                    sub.submitted_at = now
+                    sub.is_late = now > a.due_at
+                    sub.save()
             except IntegrityError:
                 messages.error(request, 'Có lỗi khi nộp, vui lòng thử lại.')
                 return redirect('assignment_detail', pk=a.pk)
-            log.info('submit user=%s assignment=%s attempt=%s', user.pk, a.pk, attempt)
-            messages.success(request, f'Đã nộp bài (lần {attempt}).')
+            if old_file and old_file != sub.file.name:
+                sub.file.storage.delete(old_file)  # the replaced file is no longer needed
+            log.info('submit user=%s assignment=%s replaced=%s', user.pk, a.pk, bool(old_file))
+            messages.success(request, action)
             return redirect('assignment_detail', pk=a.pk)
 
     return render(request, 'courses/assignment_student.html', {
-        'a': a, 'status': status, 'history': history,
-        'can_submit': can_submit, 'form': form,
-        'attempts_left': max(a.max_attempts - history.count(), 0),
+        'a': a, 'status': status, 'sub': sub, 'can_edit': can_edit, 'form': form,
     })
 
 
@@ -271,7 +301,7 @@ def export_csv(request, pk):
     resp['Content-Disposition'] = f'attachment; filename="diem_{a.course.code}_{a.pk}.csv"'
     resp.write('﻿')  # BOM so Excel reads UTF-8
     w = csv.writer(resp)
-    w.writerow(['username', 'ho_ten', 'da_nop', 'lan_nop', 'thoi_gian_nop', 'tre_han', 'diem', 'nhan_xet'])
+    w.writerow(['username', 'ho_ten', 'da_nop', 'nop_lan_dau', 'cap_nhat_lan_cuoi', 'tre_han', 'diem', 'nhan_xet'])
     latest = {}
     for s in a.submissions.all():
         latest.setdefault(s.student_id, s)
@@ -280,7 +310,8 @@ def export_csv(request, pk):
         s = latest.get(e.user_id)
         w.writerow([
             e.user.username, e.user.get_full_name(),
-            'x' if s else '', s.attempt_no if s else '',
+            'x' if s else '',
+            timezone.localtime(s.created_at).strftime('%Y-%m-%d %H:%M') if s else '',
             timezone.localtime(s.submitted_at).strftime('%Y-%m-%d %H:%M') if s else '',
             'x' if s and s.is_late else '',
             s.score if s and s.score is not None else '', s.feedback if s else '',

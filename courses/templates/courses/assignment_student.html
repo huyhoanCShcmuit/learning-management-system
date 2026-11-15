@@ -15,45 +15,44 @@
       {% if a.description %}{{ a.description|linebreaks }}{% else %}<p class="muted" style="margin:0">Không có mô tả.</p>{% endif %}
     </div>
 
-    {% if can_submit %}
     <div class="card">
-      <h2>Nộp bài</h2>
-      {% if status == 'late' %}<div class="toast" style="background:var(--warn-soft);color:var(--warn)">Đã quá hạn. Bài nộp bây giờ sẽ bị đánh dấu trễ.</div>{% endif %}
-      <form method="post" enctype="multipart/form-data">{% csrf_token %}
-        <label class="drop" id="drop">
-          <span class="muted">{% include 'courses/_icons.html' with name='upload' %}</span>
-          <div><b>Kéo thả file vào đây</b> hoặc bấm để chọn</div>
-          <div class="small muted">{{ form.file.help_text }}</div>
-          <div class="fname" id="fname"></div>
-          {{ form.file }}
-        </label>
-        {{ form.file.errors }}
-        <div class="form-actions" style="margin-top:12px"><button class="btn">Nộp bài</button></div>
-      </form>
-    </div>
-    {% elif status == 'closed' or status == 'not_open' %}
-    <div class="card muted">{% if status == 'not_open' %}Bài tập chưa mở. Bạn có thể nộp từ {{ a.open_at|date:"H:i, d/m/Y" }}.{% else %}Bài tập đã đóng, không nhận thêm bài nộp.{% endif %}</div>
-    {% else %}
-    <div class="card muted">Bạn đã dùng hết {{ a.max_attempts }} lượt nộp.</div>
-    {% endif %}
+      <h2>Bài nộp của bạn {% if sub %}{% if sub.is_late %}<span class="badge warn">Nộp trễ</span>{% else %}<span class="badge ok">Đã nộp</span>{% endif %}{% else %}<span class="badge">Chưa nộp</span>{% endif %}</h2>
 
-    <div>
-      <div class="section-head"><h2>Lịch sử nộp <span class="badge">{{ history|length }}</span></h2></div>
-      <div class="card list">
-        {% for s in history %}
-        <div class="item">
-          <span class="icon {% if s.is_late %}warn{% else %}ok{% endif %}">{% include 'courses/_icons.html' with name='file' %}</span>
-          <span class="main">
-            <div class="t"><a href="{% url 'download' s.pk %}">{{ s.original_name }}</a></div>
-            <div class="s">Lần {{ s.attempt_no }} · {{ s.submitted_at|date:"H:i:s, d/m/Y" }}{% if s.is_late %} · nộp trễ{% endif %}</div>
-            {% if s.feedback %}<div class="small" style="margin-top:4px">Nhận xét: {{ s.feedback }}</div>{% endif %}
-          </span>
-          {% if s.score is not None %}<span class="badge info">{{ s.score|floatformat:"-2" }}/{{ a.max_score|floatformat:"-2" }}</span>{% else %}<span class="badge">Chưa chấm</span>{% endif %}
-        </div>
-        {% empty %}
-        <div class="empty">Chưa nộp lần nào.</div>
-        {% endfor %}
+      {% if sub %}
+      <div class="item" style="padding:0 0 14px;border:0">
+        <span class="icon {% if sub.is_late %}warn{% else %}ok{% endif %}">{% include 'courses/_icons.html' with name='file' %}</span>
+        <span class="main">
+          <div class="t"><a href="{% url 'download' sub.pk %}">{{ sub.original_name }}</a></div>
+          <div class="s">Nộp lần đầu {{ sub.created_at|date:"H:i, d/m/Y" }}{% if sub.submitted_at != sub.created_at %} · sửa lần cuối {{ sub.submitted_at|date:"H:i, d/m/Y" }}{% endif %}</div>
+        </span>
+        {% if sub.score is not None %}<span class="badge info">{{ sub.score|floatformat:"-2" }}/{{ a.max_score|floatformat:"-2" }}</span>{% else %}<span class="badge">Chưa chấm</span>{% endif %}
       </div>
+      {% if sub.feedback %}<div class="toast" style="background:var(--surface-2);color:var(--text);margin-bottom:14px"><b>Nhận xét:</b> {{ sub.feedback }}</div>{% endif %}
+      {% endif %}
+
+      {% if can_edit %}
+        {% if status == 'late' %}<div class="toast" style="background:var(--warn-soft);color:var(--warn)">Đã quá hạn nộp. Bài nộp hoặc sửa bây giờ sẽ bị đánh dấu trễ. Bài khoá lúc {{ a.close_at|date:"H:i, d/m/Y" }}.</div>{% endif %}
+        {% if sub and sub.score is not None %}<p class="small muted" style="margin-top:0">Bài đã được chấm. Nếu sửa, giáo viên sẽ thấy bài được sửa sau khi chấm.</p>{% endif %}
+        <form method="post" enctype="multipart/form-data">{% csrf_token %}
+          <label class="drop" id="drop">
+            <span class="muted">{% include 'courses/_icons.html' with name='upload' %}</span>
+            <div><b>Kéo thả file vào đây</b> hoặc</div>
+            <span class="btn ghost small" style="margin:8px 0">Chọn file từ máy</span>
+            <div class="small muted">{{ form.file.help_text }}</div>
+            <div class="fname" id="fname"></div>
+            {{ form.file }}
+          </label>
+          {{ form.file.errors }}
+          <div class="form-actions" style="margin-top:12px">
+            <button class="btn" id="submit-btn" disabled>{% include 'courses/_icons.html' with name='upload' %} {% if sub %}Thay bằng file này{% else %}Nộp bài{% endif %}</button>
+            <span class="small muted" id="submit-hint">Chọn file trước khi {% if sub %}sửa{% else %}nộp{% endif %}.</span>
+          </div>
+        </form>
+      {% elif status == 'not_open' %}
+        <p class="muted" style="margin:0">Bài tập chưa mở. Bạn có thể nộp từ {{ a.open_at|date:"H:i, d/m/Y" }}.</p>
+      {% else %}
+        <p class="muted" style="margin:0">{% if sub %}Bài tập đã khoá lúc {{ a.close_at|date:"H:i, d/m/Y" }}, không sửa được nữa.{% else %}Bài tập đã khoá lúc {{ a.close_at|date:"H:i, d/m/Y" }}. Bạn chưa nộp bài này.{% endif %}</p>
+      {% endif %}
     </div>
   </div>
 
@@ -61,8 +60,7 @@
     <div><span class="k">Mở nộp</span><span>{{ a.open_at|date:"H:i, d/m/Y" }}</span></div>
     <div><span class="k">Hạn nộp</span><b>{{ a.due_at|date:"H:i, d/m/Y" }}</b></div>
     {% if status == 'open' %}<div><span class="k">Còn lại</span><span>{{ a.due_at|con_lai }}</span></div>{% endif %}
-    {% if a.cutoff_at %}<div><span class="k">Nhận bài trễ đến</span><span>{{ a.cutoff_at|date:"H:i, d/m/Y" }}</span></div>{% endif %}
-    <div><span class="k">Số lần đã nộp</span><span>{{ history|length }}/{{ a.max_attempts }}</span></div>
+    <div><span class="k">Khoá bài</span><span>{{ a.close_at|date:"H:i, d/m/Y" }}</span></div>
     <div><span class="k">Định dạng</span><span style="text-align:right">{{ a.allowed_display }}</span></div>
     <div><span class="k">Dung lượng tối đa</span><span>{{ a.max_size_mb }} MB</span></div>
     <div><span class="k">Điểm tối đa</span><span>{{ a.max_score|floatformat:"-2" }}</span></div>
