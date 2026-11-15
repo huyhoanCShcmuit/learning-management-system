@@ -30,7 +30,7 @@ class SubmitFlowTests(TestCase):
         Enrollment.objects.create(user=self.hs, course=self.c)
         self.open = Assignment.objects.create(
             course=self.c, title='open', open_at=now - timedelta(days=1),
-            due_at=now + timedelta(days=1), allowed_ext='pdf', max_attempts=2)
+            due_at=now + timedelta(days=1), allowed_ext='pdf')
         self.late = Assignment.objects.create(
             course=self.c, title='late', open_at=now - timedelta(days=3),
             due_at=now - timedelta(days=1), cutoff_at=now + timedelta(days=1), allowed_ext='pdf')
@@ -42,14 +42,46 @@ class SubmitFlowTests(TestCase):
         return self.client.post(reverse('assignment_detail', args=[a.pk]),
                                 {'file': SimpleUploadedFile(name, b'%PDF-1.4 test')})
 
-    def test_submit_versions_and_limit(self):
+    def test_submit_then_replace_keeps_one_submission(self):
+        import os
         self.client.force_login(self.hs)
-        self.submit(self.open)
-        self.submit(self.open)
-        self.submit(self.open)  # exceeds max_attempts=2
+        self.submit(self.open, 'ban1.pdf')
+        first = Submission.objects.get(assignment=self.open, student=self.hs)
+        old_path = first.file.path
+        self.submit(self.open, 'ban2.pdf')
         subs = Submission.objects.filter(assignment=self.open, student=self.hs)
-        self.assertEqual(sorted(s.attempt_no for s in subs), [1, 2])
-        self.assertFalse(any(s.is_late for s in subs))
+        self.assertEqual(subs.count(), 1)
+        s = subs.get()
+        self.assertEqual(s.original_name, 'ban2.pdf')
+        self.assertEqual(s.created_at, first.created_at)       # first submit time kept
+        self.assertGreaterEqual(s.submitted_at, first.submitted_at)
+        self.assertFalse(os.path.exists(old_path))              # replaced file removed
+        self.assertFalse(s.is_late)
+
+    def test_cannot_edit_after_lock(self):
+        self.client.force_login(self.hs)
+        self.submit(self.late, 'truoc.pdf')
+        Assignment.objects.filter(pk=self.late.pk).update(cutoff_at=timezone.now() - timedelta(minutes=1))
+        self.submit(self.late, 'sau.pdf')
+        self.assertEqual(Submission.objects.get(assignment=self.late).original_name, 'truoc.pdf')
+
+    def test_teacher_edits_due_date_and_late_flags_follow(self):
+        self.client.force_login(self.hs)
+        self.submit(self.late)
+        self.assertTrue(Submission.objects.get(assignment=self.late).is_late)
+        later = timezone.localtime(timezone.now() + timedelta(days=3)).strftime('%Y-%m-%dT%H:%M')
+        data = {'title': 'late', 'description': '', 'open_at': timezone.localtime(self.late.open_at).strftime('%Y-%m-%dT%H:%M'),
+                'due_at': later, 'cutoff_at': '', 'allowed_ext': 'pdf', 'max_size_mb': 20, 'max_score': 10}
+        url = reverse('assignment_edit', args=[self.late.pk])
+        self.assertEqual(self.client.post(url, data).status_code, 403)    # students cannot edit
+        self.client.force_login(self.gv)
+        r = self.client.post(url, data)
+        self.assertRedirects(r, reverse('assignment_detail', args=[self.late.pk]))
+        self.assertFalse(Submission.objects.get(assignment=self.late).is_late)
+
+    def test_teacher_page_explains_no_upload(self):
+        self.client.force_login(self.gv)
+        self.assertContains(self.client.get(reverse('assignment_detail', args=[self.open.pk])), 'vai trò <b>giáo viên</b>')
 
     def test_wrong_extension_rejected(self):
         self.client.force_login(self.hs)

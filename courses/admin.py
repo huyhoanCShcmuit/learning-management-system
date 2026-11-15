@@ -37,9 +37,9 @@ class AssignmentAdmin(admin.ModelAdmin):
 
 @admin.register(Submission)
 class SubmissionAdmin(admin.ModelAdmin):
-    list_display = ['assignment', 'student', 'attempt_no', 'submitted_at', 'is_late', 'score']
+    list_display = ['assignment', 'student', 'submitted_at', 'is_late', 'score']
     list_filter = ['assignment__course', 'is_late']
-    readonly_fields = ['submitted_at']
+    readonly_fields = ['created_at', 'submitted_at']
 
 
 

@@ -4,8 +4,15 @@
 <div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / <a href="{% url 'course_detail' a.course.pk %}">{{ a.course.code }}</a> / {{ a.title }}</div>
 <div class="page-head">
   <div><h1>{{ a.title }}</h1>
-    <p>Hạn {{ a.due_at|date:"H:i, d/m/Y" }}{% if a.cutoff_at %} · đóng {{ a.cutoff_at|date:"H:i, d/m/Y" }}{% endif %} · thang điểm {{ a.max_score|floatformat:"-2" }} · {{ a.allowed_display }}</p></div>
-  <div class="actions">{% include 'courses/_status.html' %}<a class="btn ghost small" href="{% url 'export_csv' a.pk %}">{% include 'courses/_icons.html' with name='download' %} Xuất CSV</a></div>
+    <p>Hạn {{ a.due_at|date:"H:i, d/m/Y" }} · khoá {{ a.close_at|date:"H:i, d/m/Y" }} · thang điểm {{ a.max_score|floatformat:"-2" }} · {{ a.allowed_display }}</p></div>
+  <div class="actions">{% include 'courses/_status.html' %}
+    <a class="btn ghost small" href="{% url 'assignment_edit' a.pk %}">Sửa bài tập</a>
+    <a class="btn ghost small" href="{% url 'export_csv' a.pk %}">{% include 'courses/_icons.html' with name='download' %} Xuất CSV</a></div>
+</div>
+
+<div class="toast" style="background:var(--primary-soft);color:var(--primary)" role="note">
+  Bạn đang xem bài tập với vai trò <b>giáo viên</b>{% if user.is_superuser %} (tài khoản quản trị được xem như giáo viên ở mọi khoá){% endif %}, nên trang này để chấm bài chứ không có chỗ nộp.
+  Học viên đăng nhập bằng tài khoản của mình sẽ thấy nút nộp bài.
 </div>
 
 <div class="grid stats3">
@@ -21,14 +28,14 @@
   <div class="section-head"><h2>Bài nộp</h2></div>
   <div class="card table-card"><div class="table-scroll">
   <table>
-    <tr><th>Học viên</th><th>Bài nộp mới nhất</th><th>Thời gian</th><th>Điểm và nhận xét</th></tr>
+    <tr><th>Học viên</th><th>Bài nộp</th><th>Cập nhật</th><th>Điểm và nhận xét</th></tr>
     {% for u, s, gform in rows %}
     <tr>
       <td><div class="person"><span class="avatar">{{ u.first_name|slice:":1"|upper|default:u.username|slice:":1"|upper }}</span>
         <div><a href="{% url 'member_progress' a.course.pk u.pk %}" style="font-weight:600;color:var(--text)">{{ u.get_full_name|default:u.username }}</a><div class="muted small">{{ u.username }}</div></div></div></td>
       {% if s %}
-        <td><a href="{% url 'download' s.pk %}">{{ s.original_name }}</a><div class="muted small">lần {{ s.attempt_no }}</div></td>
-        <td>{{ s.submitted_at|date:"H:i, d/m" }} {% if s.is_late %}<span class="badge warn">Trễ</span>{% endif %}</td>
+        <td><a href="{% url 'download' s.pk %}">{{ s.original_name }}</a>{% if s.edited_after_grading %} <span class="badge warn">Sửa sau khi chấm</span>{% endif %}</td>
+        <td>{{ s.submitted_at|date:"H:i, d/m" }} {% if s.is_late %}<span class="badge warn">Trễ</span>{% endif %}{% if s.submitted_at != s.created_at %}<div class="muted small">nộp lần đầu {{ s.created_at|date:"H:i, d/m" }}</div>{% endif %}</td>
         <td>
           <form class="grade-form" method="post" action="{% url 'grade' s.pk %}">{% csrf_token %}
             {{ gform.score }} {{ gform.feedback }}

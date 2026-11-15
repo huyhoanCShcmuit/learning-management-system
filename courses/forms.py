@@ -61,7 +61,7 @@ class AssignmentForm(forms.ModelForm):
     class Meta:
         model = Assignment
         fields = ['title', 'description', 'open_at', 'due_at', 'cutoff_at',
-                  'max_attempts', 'allowed_ext', 'max_size_mb', 'max_score']
+                  'allowed_ext', 'max_size_mb', 'max_score']
         widgets = {
             'open_at': DateTimeInput(),
             'due_at': DateTimeInput(),

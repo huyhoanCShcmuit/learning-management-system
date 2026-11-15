@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
-{% block title %}Tạo bài tập{% endblock %}
+{% block title %}{% if a %}Sửa bài tập{% else %}Tạo bài tập{% endif %}{% endblock %}
 {% block content %}
-<div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / <a href="{% url 'course_detail' course.pk %}">{{ course.code }}</a> / Tạo bài tập</div>
-<div class="page-head"><div><h1>Tạo bài tập</h1><p>{{ course.code }} · {{ course.name }}</p></div></div>
+<div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / <a href="{% url 'course_detail' course.pk %}">{{ course.code }}</a> / {% if a %}<a href="{% url 'assignment_detail' a.pk %}">{{ a.title }}</a> / Sửa{% else %}Tạo bài tập{% endif %}</div>
+<div class="page-head"><div><h1>{% if a %}Sửa bài tập{% else %}Tạo bài tập{% endif %}</h1><p>{{ course.code }} · {{ course.name }}</p></div></div>
 <div class="card medium">
   <form method="post">{% csrf_token %}
     {{ form.non_field_errors }}
@@ -15,7 +15,8 @@
       </p>
       {% endfor %}
     </div>
-    <div class="form-actions"><button class="btn">Tạo bài tập</button><a class="btn ghost" href="{% url 'course_detail' course.pk %}">Huỷ</a></div>
+    {% if a %}<p class="small muted">Đổi hạn nộp sẽ tự cập nhật lại nhãn "trễ" của các bài đã nộp. Đổi giờ khoá bài sẽ mở lại hoặc khoá việc nộp/sửa ngay lập tức.</p>{% endif %}
+    <div class="form-actions"><button class="btn">{% if a %}Lưu thay đổi{% else %}Tạo bài tập{% endif %}</button><a class="btn ghost" href="{% if a %}{% url 'assignment_detail' a.pk %}{% else %}{% url 'course_detail' course.pk %}{% endif %}">Huỷ</a></div>
   </form>
 </div>
 {% endblock %}
