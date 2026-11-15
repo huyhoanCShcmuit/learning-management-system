@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}Trang cá nhân{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / Trang cá nhân</div>
+<div class="page-head">
+  <div class="person" style="gap:16px">
+    <span class="avatar lg">{{ user.first_name|slice:":1"|upper|default:user.username|slice:":1"|upper }}</span>
+    <div>
+      <h1>{{ user.get_full_name|default:user.username }}{% if user.is_superuser %} <span class="badge info" style="vertical-align:middle">Quản trị viên</span>{% endif %}</h1>
+      <p>{{ user.username }}{% if user.email %} · {{ user.email }}{% endif %}</p>
+      <p class="small">Tham gia {{ user.date_joined|date:"d/m/Y" }}{% if user.last_login %} · đăng nhập gần nhất {{ user.last_login|date:"H:i, d/m/Y" }}{% endif %}</p>
+    </div>
+  </div>
+  <div class="actions">
+    <a class="btn ghost" href="{% url 'settings' %}">Sửa thông tin</a>
+    <a class="btn ghost" href="{% url 'password_change' %}">Đổi mật khẩu</a>
+  </div>
+</div>
+
+<div class="grid stats3">
+  <div class="card stat-card"><div class="v">{{ n_courses }}</div><div class="l">khoá học</div></div>
+  <div class="card stat-card"><div class="v">{{ n_submissions }}</div><div class="l">lần nộp bài</div></div>
+  <div class="card stat-card"><div class="v">{{ n_graded }}</div><div class="l">bài đã được chấm</div></div>
+</div>
+
+<div class="two section">
+  <section>
+    <div class="section-head"><h2>Khoá học</h2></div>
+    <div class="card table-card"><div class="table-scroll">
+    <table>
+      <tr><th>Khoá</th><th>Vai trò</th><th>Tiến độ</th><th class="num">Ghi danh</th></tr>
+      {% for r in rows %}
+      <tr>
+        <td><a href="{% url 'course_detail' r.e.course.pk %}" style="font-weight:600">{{ r.e.course.name }}</a><div class="muted small">{{ r.e.course.code }}</div></td>
+        <td>{% if r.e.role == 'teacher' %}<span class="badge info">Giáo viên</span>{% else %}<span class="badge">Học viên</span>{% endif %}</td>
+        <td>{% if r.e.role == 'student' %}
+            <div class="meter"><div class="progress"><span style="width:{% widthratio r.submitted r.e.n_assign|default:1 100 %}%"></span></div>{{ r.submitted }}/{{ r.e.n_assign }} bài</div>
+            {% else %}<span class="small muted">{{ r.students }} học viên · {{ r.e.n_assign }} bài tập</span>{% endif %}</td>
+        <td class="num small muted">{{ r.e.enrolled_at|date:"d/m/Y" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="empty">Chưa được ghi danh vào khoá nào.</td></tr>
+      {% endfor %}
+    </table>
+    </div></div>
+  </section>
+  <aside>
+    <div class="section-head"><h2>Bài nộp gần đây</h2></div>
+    <div class="card list">
+      {% for s in recent %}
+      <a class="item" href="{% url 'assignment_detail' s.assignment.pk %}">
+        <span class="main"><div class="t">{{ s.assignment.title }}</div><div class="s">{{ s.assignment.course.code }} · {{ s.submitted_at|date:"H:i, d/m" }}</div></span>
+        {% if s.score is not None %}<span class="badge info">{{ s.score|floatformat:"-2" }}</span>{% elif s.is_late %}<span class="badge warn">Trễ</span>{% else %}<span class="badge">Chờ chấm</span>{% endif %}
+      </a>
+      {% empty %}
+      <div class="empty">Chưa có bài nộp nào.</div>
+      {% endfor %}
+    </div>
+  </aside>
+</div>
+{% endblock %}

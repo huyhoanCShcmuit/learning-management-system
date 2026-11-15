@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}{{ member.user.get_full_name|default:member.user.username }} · {{ course.code }}{% endblock %}
+{% block content %}
+{% include 'courses/_course_header.html' %}
+{% with u=member.user %}
+<section class="section">
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div class="person" style="gap:14px">
+        <span class="avatar lg">{{ u.first_name|slice:":1"|upper|default:u.username|slice:":1"|upper }}</span>
+        <div>
+          <div style="font-size:20px;font-weight:600">{{ u.get_full_name|default:u.username }}</div>
+          <div class="muted small">{{ u.username }}{% if u.email %} · {{ u.email }}{% endif %} · ghi danh {{ member.enrolled_at|date:"d/m/Y" }}</div>
+        </div>
+      </div>
+      <div class="course-facts">
+        <div><b>{{ submitted }}/{{ n_assign }}</b><span>đã nộp</span></div>
+        <div><b>{% if avg is not None %}{{ avg }}%{% else %}—{% endif %}</b><span>điểm TB</span></div>
+        <div><b style="{% if missing %}color:var(--bad){% endif %}">{{ missing }}</b><span>bài thiếu</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-head"><h2>Tiến độ từng bài</h2></div>
+  <div class="card table-card"><div class="table-scroll">
+  <table>
+    <tr><th>Bài tập</th><th>Hạn nộp</th><th>Trạng thái</th><th>Nộp lúc</th><th class="num">Điểm</th></tr>
+    {% for i in items %}
+    <tr>
+      <td><a href="{% url 'assignment_detail' i.a.pk %}" style="font-weight:600;color:var(--text)">{{ i.a.title }}</a></td>
+      <td class="small">{{ i.a.due_at|date:"H:i, d/m/Y" }}</td>
+      <td>{% if i.st == 'graded' %}<span class="badge ok">Đã chấm</span>{% elif i.st == 'submitted' %}<span class="badge info">Chờ chấm</span>{% elif i.st == 'late' %}<span class="badge warn">Nộp trễ</span>{% elif i.st == 'missing' %}<span class="badge bad">Thiếu</span>{% elif i.st == 'overdue' %}<span class="badge warn">Quá hạn, chưa nộp</span>{% else %}<span class="badge">Chưa đến hạn</span>{% endif %}</td>
+      <td class="small">{% if i.s %}{{ i.s.submitted_at|date:"H:i, d/m/Y" }} · lần {{ i.s.attempt_no }}{% else %}—{% endif %}</td>
+      <td class="num">{% if i.s and i.s.score is not None %}<b>{{ i.s.score|floatformat:"-2" }}</b>/{{ i.a.max_score|floatformat:"-2" }}{% else %}—{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="empty">Khoá chưa có bài tập.</td></tr>
+    {% endfor %}
+  </table>
+  </div></div>
+</section>
+{% endwith %}
+{% endblock %}

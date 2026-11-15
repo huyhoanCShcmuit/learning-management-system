@@ -1,0 +1,16 @@
+<div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / Quyền riêng tư</div>
+<div class="page-head"><div><h1>Quyền riêng tư</h1><p>Hệ thống lưu những gì và dùng vào việc gì.</p></div></div>
+<div class="card prose medium">
+  <h2>Dữ liệu được lưu</h2>
+  <ul>
+    <li><b>Tài khoản:</b> tên đăng nhập, họ tên, email, thời điểm đăng nhập gần nhất. Mật khẩu chỉ lưu dạng mã hoá một chiều (Argon2), không ai đọc được, kể cả quản trị viên.</li>
+    <li><b>Học tập:</b> khoá bạn tham gia, bài nộp, thời gian nộp, điểm và nhận xét.</li>
+    <li><b>File nộp:</b> lưu trên máy chủ của trường với tên ngẫu nhiên. Chỉ bạn và giáo viên của khoá tải được.</li>
+  </ul>
+  <h2>Cookie</h2>
+  <p>Chỉ dùng cookie cần thiết: cookie phiên đăng nhập và cookie chống giả mạo yêu cầu (CSRF). Không dùng cookie quảng cáo hay theo dõi, không có công cụ phân tích bên thứ ba.</p>
+  <h2>Ai xem được dữ liệu của bạn</h2>
+  <p>Giáo viên của khoá xem được bài nộp và điểm của bạn trong khoá đó. Quản trị viên quản lý tài khoản và khoá học. Dữ liệu không được chia sẻ ra ngoài.</p>
+  <h2>Yêu cầu về dữ liệu</h2>
+  <p>Muốn sửa thông tin cá nhân, vào <a href="{% url 'settings' %}">Cài đặt tài khoản</a>. Muốn xoá tài khoản hoặc xuất dữ liệu, liên hệ quản trị viên của trường.</p>
+</div>

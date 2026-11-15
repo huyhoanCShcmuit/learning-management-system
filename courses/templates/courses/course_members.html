@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load lms static %}
+{% block title %}Thành viên · {{ course.code }}{% endblock %}
+{% block content %}
+{% include 'courses/_course_header.html' %}
+
+<section class="section">
+  <div class="section-head">
+    <form class="search-form" method="get">
+      <input type="search" name="q" value="{{ q }}" placeholder="Tìm tên, username, email…">
+      <select name="role" style="width:auto">
+        <option value="">Tất cả vai trò</option>
+        <option value="student" {% if role_filter == 'student' %}selected{% endif %}>Học viên ({{ n_students }})</option>
+        <option value="teacher" {% if role_filter == 'teacher' %}selected{% endif %}>Giáo viên ({{ n_teachers }})</option>
+      </select>
+      <button class="btn ghost">Lọc</button>
+    </form>
+  </div>
+
+  <details class="card enrol" style="margin-bottom:12px">
+    <summary class="btn small">+ Ghi danh thành viên</summary>
+    <form method="post" class="narrow" style="margin-top:14px">{% csrf_token %}
+      <input type="hidden" name="action" value="enrol">
+      <p><label for="usernames">Username</label>
+        <textarea id="usernames" name="usernames" rows="4" placeholder="hs1&#10;hs2, hs3" required></textarea>
+        <span class="helptext">Mỗi dòng một username, hoặc cách nhau bằng dấu phẩy. Tài khoản phải có sẵn trong hệ thống.</span></p>
+      <p><label for="role">Vai trò</label>
+        <select id="role" name="role">
+          <option value="student">Học viên</option>
+          {% if user.is_superuser %}<option value="teacher">Giáo viên</option>{% endif %}
+        </select></p>
+      <div class="form-actions"><button class="btn">Ghi danh vào khoá</button></div>
+    </form>
+  </details>
+
+  <div class="card table-card"><div class="table-scroll">
+  <table>
+    <tr><th>Thành viên</th><th>Vai trò</th><th>Đã nộp</th><th class="num">Điểm TB</th><th class="num">Truy cập gần nhất</th><th></th></tr>
+    {% for r in rows %}{% with u=r.e.user %}
+    <tr>
+      <td><div class="person"><span class="avatar">{{ u.first_name|slice:":1"|upper|default:u.username|slice:":1"|upper }}</span>
+        <div>
+          {% if r.e.role == 'student' %}<a href="{% url 'member_progress' course.pk u.pk %}" style="font-weight:600;color:var(--text)">{{ u.get_full_name|default:u.username }}</a>
+          {% else %}<span style="font-weight:600">{{ u.get_full_name|default:u.username }}</span>{% endif %}
+          <div class="muted small">{{ u.username }}{% if u.email %} · {{ u.email }}{% endif %}</div>
+        </div></div></td>
+      <td>{% if r.e.role == 'teacher' %}<span class="badge info">Giáo viên</span>{% else %}<span class="badge">Học viên</span>{% endif %}</td>
+      <td>{% if r.submitted is not None %}
+        <div class="meter"><div class="progress"><span style="width:{% widthratio r.submitted n_assign|default:1 100 %}%"></span></div>{{ r.submitted }}/{{ n_assign }}</div>
+        {% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="num">{% if r.avg is not None %}{{ r.avg }}%{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="num small">{% if u.last_login %}{{ u.last_login|truoc }}{% else %}<span class="muted">Chưa đăng nhập</span>{% endif %}</td>
+      <td class="num">
+        {% if u.pk != user.pk and r.e.role == 'student' or u.pk != user.pk and user.is_superuser %}
+        <form method="post" class="confirm-remove" data-name="{{ u.get_full_name|default:u.username }}" style="margin:0">{% csrf_token %}
+          <input type="hidden" name="action" value="remove"><input type="hidden" name="enrollment" value="{{ r.e.pk }}">
+          <button class="btn danger small">Xoá</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endwith %}{% empty %}
+    <tr><td colspan="6" class="empty">Không có thành viên phù hợp.</td></tr>
+    {% endfor %}
+  </table>
+  </div></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'courses/confirm.js' %}" defer></script>{% endblock %}

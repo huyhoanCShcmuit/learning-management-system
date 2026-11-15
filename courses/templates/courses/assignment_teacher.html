@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}{{ a.title }}{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / <a href="{% url 'course_detail' a.course.pk %}">{{ a.course.code }}</a> / {{ a.title }}</div>
+<div class="page-head">
+  <div><h1>{{ a.title }}</h1>
+    <p>Hạn {{ a.due_at|date:"H:i, d/m/Y" }}{% if a.cutoff_at %} · đóng {{ a.cutoff_at|date:"H:i, d/m/Y" }}{% endif %} · thang điểm {{ a.max_score|floatformat:"-2" }} · {{ a.allowed_display }}</p></div>
+  <div class="actions">{% include 'courses/_status.html' %}<a class="btn ghost small" href="{% url 'export_csv' a.pk %}">{% include 'courses/_icons.html' with name='download' %} Xuất CSV</a></div>
+</div>
+
+<div class="grid stats3">
+  <div class="card stat-card"><div><div class="v">{{ stats.submitted }}/{{ stats.total }}</div><div class="l">đã nộp</div></div>
+    <div class="progress"><span style="width:{% widthratio stats.submitted stats.total|default:1 100 %}%"></span></div></div>
+  <div class="card stat-card"><div><div class="v">{{ stats.late }}</div><div class="l">nộp trễ</div></div>
+    <div class="progress"><span style="width:{% widthratio stats.late stats.total|default:1 100 %}%;background:var(--warn)"></span></div></div>
+  <div class="card stat-card"><div><div class="v">{{ stats.graded }}/{{ stats.submitted }}</div><div class="l">đã chấm</div></div>
+    <div class="progress"><span style="width:{% widthratio stats.graded stats.submitted|default:1 100 %}%;background:var(--ok)"></span></div></div>
+</div>
+
+<section class="section">
+  <div class="section-head"><h2>Bài nộp</h2></div>
+  <div class="card table-card"><div class="table-scroll">
+  <table>
+    <tr><th>Học viên</th><th>Bài nộp mới nhất</th><th>Thời gian</th><th>Điểm và nhận xét</th></tr>
+    {% for u, s, gform in rows %}
+    <tr>
+      <td><div class="person"><span class="avatar">{{ u.first_name|slice:":1"|upper|default:u.username|slice:":1"|upper }}</span>
+        <div><a href="{% url 'member_progress' a.course.pk u.pk %}" style="font-weight:600;color:var(--text)">{{ u.get_full_name|default:u.username }}</a><div class="muted small">{{ u.username }}</div></div></div></td>
+      {% if s %}
+        <td><a href="{% url 'download' s.pk %}">{{ s.original_name }}</a><div class="muted small">lần {{ s.attempt_no }}</div></td>
+        <td>{{ s.submitted_at|date:"H:i, d/m" }} {% if s.is_late %}<span class="badge warn">Trễ</span>{% endif %}</td>
+        <td>
+          <form class="grade-form" method="post" action="{% url 'grade' s.pk %}">{% csrf_token %}
+            {{ gform.score }} {{ gform.feedback }}
+            <button class="btn small">{% if s.score is not None %}Cập nhật{% else %}Lưu{% endif %}</button>
+          </form>
+        </td>
+      {% else %}
+        <td colspan="3"><span class="badge">Chưa nộp</span></td>
+      {% endif %}
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" class="empty">Khoá chưa có học viên.</td></tr>
+    {% endfor %}
+  </table>
+  </div></div>
+</section>
+{% endblock %}

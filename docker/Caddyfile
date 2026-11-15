@@ -1,0 +1,31 @@
+{
+	# No admin API exposed.
+	admin off
+}
+
+# SITE_ADDRESS=":80" for local use. Set it to a real domain (lms.example.com)
+# and Caddy fetches a Let's Encrypt certificate and serves HTTPS automatically.
+{$SITE_ADDRESS::80} {
+	# Hard cap on request size (uploads). Per-assignment limits are checked in Django.
+	request_body {
+		max_size 60MB
+	}
+
+	encode zstd gzip
+
+	header {
+		-Server
+		-Via
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+	}
+
+	reverse_proxy web:8000 {
+		header_up -X-Forwarded-Host
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

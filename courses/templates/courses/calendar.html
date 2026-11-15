@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}Lịch{% endblock %}
+{% block head %}<style>
+  .cal-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+  .cal-head h1 { margin:0; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:13px; color:var(--muted); margin-bottom:12px; }
+  .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; background:var(--k); vertical-align:-1px; }
+  .cal { padding:0; overflow:hidden; }
+  .cal table { table-layout:fixed; }
+  .cal th { text-align:center; padding:10px 4px; }
+  .cal td { height:104px; padding:6px; vertical-align:top; border-right:1px solid var(--line); }
+  .cal td:last-child { border-right:0; }
+  .cal td.out { background:var(--surface-2); } .cal td.out .num { color:var(--muted); opacity:.6; }
+  .num { font-size:13px; font-weight:600; display:inline-grid; place-items:center; width:26px; height:26px; border-radius:50%; }
+  td.today .num { background:var(--primary); color:var(--surface); border-radius:50%; }
+  .ev { display:block; font-size:12px; line-height:1.3; padding:4px 6px; margin-top:4px; border-radius:3px;
+        color:var(--text); background:var(--surface-2); border-left:3px solid var(--k); overflow:hidden;
+        display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; word-break:break-word; }
+  .ev:hover { text-decoration:none; filter:brightness(.97); }
+  .ev .t { color:var(--muted); margin-right:4px; }
+  .k-todo { --k:var(--primary); } .k-done { --k:var(--ok); } .k-late { --k:var(--warn); }
+  .k-missed { --k:var(--bad); } .k-teach { --k:var(--muted); }
+  .agenda { display:none; }
+  @media (max-width:760px) { .cal { display:none; } .agenda { display:flex; } }
+</style>{% endblock %}
+{% block content %}
+<div class="page-head" style="margin-bottom:12px">
+  <div><h1>Lịch</h1><p>{{ title }}</p></div>
+  <div class="actions">
+  <a class="btn ghost small" href="?y={{ prev.0 }}&m={{ prev.1 }}" aria-label="Tháng trước">‹</a>
+  <a class="btn ghost small" href="?y={{ today.year }}&m={{ today.month }}">Hôm nay</a>
+  <a class="btn ghost small" href="?y={{ next.0 }}&m={{ next.1 }}" aria-label="Tháng sau">›</a>
+  </div>
+</div>
+<div class="legend">
+  <span class="k-todo">Chưa nộp</span><span class="k-done">Đã nộp</span><span class="k-late">Quá hạn, còn nộp trễ</span>
+  <span class="k-missed">Đã khoá, chưa nộp</span><span class="k-teach">Khoá mình dạy</span>
+</div>
+
+<div class="card cal"><table>
+  <tr>{% for w in weekdays %}<th>{{ w }}</th>{% endfor %}</tr>
+  {% for week in grid %}<tr>
+    {% for d in week %}
+    <td class="{% if not d.in_month %}out{% endif %} {% if d.today %}today{% endif %}">
+      <span class="num">{{ d.date.day }}</span>
+      {% for e in d.events %}
+        <a class="ev k-{{ e.kind }}" href="{% url 'assignment_detail' e.a.pk %}" title="{{ e.a.course.code }} · {{ e.a.title }} · {{ e.a.due_at|date:'H:i' }}">
+          <span class="t">{{ e.a.due_at|date:"H:i" }}</span>{{ e.a.title }}</a>
+      {% endfor %}
+    </td>
+    {% endfor %}
+  </tr>{% endfor %}
+</table></div>
+
+<div class="card list agenda">
+  {% for e in month_events %}
+  <a class="item k-{{ e.kind }}" href="{% url 'assignment_detail' e.a.pk %}" style="border-left:4px solid var(--k)">
+    <span class="main"><div class="t">{{ e.a.title }}</div>
+      <div class="s">{{ e.a.course.code }} · {{ e.a.due_at|date:"H:i, d/m" }}</div></span>
+  </a>
+  {% empty %}
+  <div class="empty">Không có deadline trong tháng này.</div>
+  {% endfor %}
+</div>
+{% endblock %}

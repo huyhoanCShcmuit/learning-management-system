@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load lms %}
+{% block title %}{{ course.code }}{% endblock %}
+{% block content %}
+{% include 'courses/_course_header.html' %}
+<section class="section">
+  <div class="section-head">
+    <h2>Bài tập <span class="badge">{{ rows|length }}</span></h2>
+    {% if role == 'teacher' %}<div class="actions"><a class="btn small" href="{% url 'assignment_create' course.pk %}">{% include 'courses/_icons.html' with name='plus' %} Tạo bài tập</a></div>{% endif %}
+  </div>
+  <div class="card list">
+    {% for a, mine in rows %}
+    {% with st=a.status %}
+    <a class="item" href="{% url 'assignment_detail' a.pk %}">
+      <span class="icon {% if mine %}ok{% elif st == 'closed' %}bad{% elif st == 'late' %}warn{% endif %}">
+        {% if mine %}{% include 'courses/_icons.html' with name='check' %}{% elif st == 'closed' %}{% include 'courses/_icons.html' with name='lock' %}{% else %}{% include 'courses/_icons.html' with name='file' %}{% endif %}
+      </span>
+      <span class="main">
+        <div class="t">{{ a.title }}</div>
+        <div class="s">Hạn nộp {{ a.due_at|date:"H:i, d/m/Y" }}{% if st == 'open' %} · còn {{ a.due_at|con_lai }}{% endif %}</div>
+      </span>
+      {% if role == 'student' and mine %}
+        {% if mine.score is not None %}<span class="badge info">{{ mine.score|floatformat:"-2" }}/{{ a.max_score|floatformat:"-2" }}</span>{% endif %}
+        <span class="badge ok">Đã nộp{% if mine.is_late %} (trễ){% endif %}</span>
+      {% else %}
+        {% include 'courses/_status.html' with status=st %}
+      {% endif %}
+    </a>
+    {% endwith %}
+    {% empty %}
+    <div class="empty">Chưa có bài tập.</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

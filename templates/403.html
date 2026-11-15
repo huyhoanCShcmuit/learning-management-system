@@ -1,0 +1,4 @@
+{% extends 'base.html' %}
+{% block title %}Không có quyền truy cập{% endblock %}
+{% block content %}{% include '_error.html' with code='403' title='Không có quyền truy cập' msg='Bạn không có quyền xem trang này. Nếu bạn nghĩ đây là nhầm lẫn, hãy liên hệ giáo viên hoặc quản trị viên.' %}{% endblock %}
+{% block public %}<div class="auth-page"><div class="auth-box">{% include '_error.html' with code='403' title='Không có quyền truy cập' msg='Bạn cần đăng nhập để xem trang này.' %}</div></div>{% endblock %}

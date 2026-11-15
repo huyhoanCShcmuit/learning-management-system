@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load lms %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Xin chào, {{ user.first_name|default:user.username }}</h1><p>{% now "l, d/m/Y" %}</p></div>
+  <div class="actions"><a class="btn ghost" href="{% url 'calendar' %}">Xem lịch</a></div>
+</div>
+
+<div class="two">
+  <section>
+    <div class="section-head"><h2>Khoá học của tôi <span class="badge">{{ course_rows|length }}</span></h2></div>
+    <div class="grid">
+    {% for c, role in course_rows %}
+      <a class="card course {{ c.color }}" href="{% url 'course_detail' c.pk %}">
+        <div class="banner"></div>
+        <div class="body">
+          <div class="code">{{ c.code }}{% if role == 'teacher' %} · Giáo viên{% endif %}</div>
+          <div class="title">{{ c.name }}</div>
+          <div class="small muted">{{ c.n_assign }} bài tập</div>
+        </div>
+      </a>
+    {% empty %}
+      <div class="card empty">Bạn chưa được ghi danh vào khoá nào.</div>
+    {% endfor %}
+    </div>
+  </section>
+
+  <aside>
+    <div class="section-head"><h2>Việc cần làm</h2></div>
+    <div class="stack">
+      {% if is_teacher %}
+      <div class="card stat-card"><div class="v">{{ to_grade }}</div><div class="l">bài nộp đang chờ chấm</div></div>
+      {% endif %}
+      <div class="card list">
+        <div class="item"><b>Sắp đến hạn</b></div>
+        {% for a, done in upcoming %}
+        <a class="item" href="{% url 'assignment_detail' a.pk %}">
+          <span class="main"><div class="t">{{ a.title }}</div><div class="s">{{ a.course.code }} · {{ a.due_at|date:"H:i, d/m" }}</div></span>
+          {% if done %}<span class="badge ok">Đã nộp</span>{% else %}<span class="badge warn">còn {{ a.due_at|con_lai }}</span>{% endif %}
+        </a>
+        {% empty %}
+        <div class="item muted small">Không có bài nào sắp đến hạn.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+<!doctype html>
+{% load static %}
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Trang chủ{% endblock %} · Learning Management System</title>
+<meta name="description" content="{% block description %}Hệ thống quản lý học tập: khoá học, bài tập, nộp bài và chấm điểm trực tuyến.{% endblock %}">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c2027" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="{% static 'courses/favicon.svg' %}" type="image/svg+xml">
+<link rel="stylesheet" href="{% static 'courses/app.css' %}">
+{% block head %}{% endblock %}
+</head>
+<body>
+<a class="skip-link" href="#main">Bỏ qua đến nội dung chính</a>
+{% if user.is_authenticated %}
+<header class="topbar">
+  <a class="site" href="{% url 'dashboard' %}" aria-label="Learning Management System – Trang chủ"><span class="mark" aria-hidden="true">L</span><span class="full">Learning Management System</span><span class="short">LMS</span></a>
+  <span class="spacer"></span>
+  <details class="usermenu">
+    <summary aria-label="Menu tài khoản">
+      <span class="avatar" aria-hidden="true">{{ user.first_name|slice:":1"|upper|default:user.username|slice:":1"|upper }}</span>
+      <span class="name">{{ user.get_full_name|default:user.username }}</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </summary>
+    <div class="menu">
+      <div class="who">Đăng nhập là <b>{{ user.username }}</b></div>
+      <hr>
+      <a href="{% url 'profile' %}">Trang cá nhân</a>
+      <a href="{% url 'settings' %}">Cài đặt tài khoản</a>
+      <a href="{% url 'password_change' %}">Đổi mật khẩu</a>
+      {% if user.is_staff %}<a href="{% url 'admin:index' %}">Trang quản trị</a>{% endif %}
+      <a href="{% url 'help' %}">Trợ giúp</a>
+      <hr>
+      <form method="post" action="{% url 'logout' %}" style="margin:0">{% csrf_token %}<button>Đăng xuất</button></form>
+    </div>
+  </details>
+</header>
+<div class="shell">
+  <nav class="sidebar" aria-label="Điều hướng chính">
+    {% with u=request.resolver_match.url_name %}
+    <a href="{% url 'dashboard' %}" class="{% if u == 'dashboard' %}on{% endif %}" {% if u == 'dashboard' %}aria-current="page"{% endif %}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V21H3z"/></svg>Trang chủ</a>
+    <a href="{% url 'calendar' %}" class="{% if u == 'calendar' %}on{% endif %}" {% if u == 'calendar' %}aria-current="page"{% endif %}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Lịch</a>
+    <a href="{% url 'profile' %}" class="{% if u == 'profile' or u == 'settings' or u == 'password_change' %}on{% endif %}" {% if u == 'profile' %}aria-current="page"{% endif %}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Trang cá nhân</a>
+    {% if user.is_staff %}<a href="{% url 'admin:index' %}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg>Quản trị</a>{% endif %}
+    {% if user.is_staff %}<a href="{% url 'import_users' %}" class="{% if u == 'import_users' %}on{% endif %}" {% if u == 'import_users' %}aria-current="page"{% endif %}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Nhập người dùng</a>{% endif %}
+    {% endwith %}
+    <div class="label" id="nav-courses-label">Khoá học của tôi</div>
+    <div class="courses" role="group" aria-labelledby="nav-courses-label">
+      {% for c in nav_courses %}
+      <a href="{% url 'course_detail' c.pk %}" class="{% if course.pk == c.pk %}on{% endif %}" title="{{ c.name }}"><span class="code">{{ c.code }}</span><span class="nm">{{ c.name }}</span></a>
+      {% empty %}<div class="muted small" style="padding:4px 10px">Chưa có khoá nào.</div>{% endfor %}
+    </div>
+  </nav>
+  <div class="content">
+    <main class="inner" id="main" tabindex="-1">
+      {% for m in messages %}<div class="toast {{ m.tags }}" role="status">{{ m }}</div>{% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+    {% include '_footer.html' %}
+  </div>
+</div>
+{% else %}
+<main id="main" tabindex="-1">{% block public %}{% endblock %}</main>
+{% include '_footer.html' %}
+{% endif %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

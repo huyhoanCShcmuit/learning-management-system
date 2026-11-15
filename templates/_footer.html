@@ -1,0 +1,14 @@
+<footer class="site-footer" role="contentinfo">
+  <div class="foot-inner">
+    <div>
+      <div class="foot-brand"><span class="mark">L</span>Learning Management System</div>
+      <p class="muted small">Hệ thống quản lý học tập và nộp bài trực tuyến.</p>
+    </div>
+    <nav class="foot-links" aria-label="Liên kết cuối trang">
+      <a href="{% url 'help' %}">Trợ giúp</a>
+      <a href="{% url 'privacy' %}">Quyền riêng tư</a>
+      {% if user.is_authenticated %}<a href="{% url 'calendar' %}">Lịch</a><a href="{% url 'profile' %}">Tài khoản</a>{% else %}<a href="{% url 'login' %}">Đăng nhập</a>{% endif %}
+    </nav>
+  </div>
+  <div class="foot-bottom muted small">© {% now "Y" %} Learning Management System. Mọi quyền được bảo lưu.</div>
+</footer>

@@ -1,0 +1,40 @@
+<div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / Trợ giúp</div>
+<div class="page-head"><div><h1>Trợ giúp</h1><p>Hướng dẫn nhanh cho học viên và giáo viên.</p></div></div>
+<div class="two">
+  <div class="stack">
+    <section class="card prose" id="hoc-vien">
+      <h2>Dành cho học viên</h2>
+      <ol>
+        <li>Đăng nhập bằng tài khoản trường cấp. Trang chủ hiện các khoá bạn được ghi danh và các bài sắp đến hạn.</li>
+        <li>Mở bài tập, đọc đề, kéo thả file vào ô <b>Nộp bài</b> rồi bấm <b>Nộp bài</b>.</li>
+        <li>Bạn có thể nộp lại nhiều lần trong giới hạn của bài. Lần nộp mới nhất là bài được chấm.</li>
+        <li>Nộp sau hạn nhưng trước giờ đóng sẽ bị đánh dấu <b>trễ</b>. Sau giờ đóng thì không nộp được nữa.</li>
+        <li>Điểm và nhận xét xem ở tab <b>Điểm của tôi</b> trong mỗi khoá.</li>
+      </ol>
+    </section>
+    <section class="card prose" id="giao-vien">
+      <h2>Dành cho giáo viên</h2>
+      <ol>
+        <li>Trong khoá, tab <b>Bài tập</b> có nút <b>Tạo bài tập</b>: đặt hạn nộp, giờ đóng, số lần nộp, định dạng file.</li>
+        <li>Tab <b>Thành viên</b>: xem học viên, tiến độ, ghi danh thêm bằng username.</li>
+        <li>Tab <b>Bảng điểm</b>: điểm của cả lớp theo từng bài, xuất CSV.</li>
+        <li>Mở một bài tập để tải bài nộp, nhập điểm và nhận xét.</li>
+      </ol>
+    </section>
+    <section class="card prose" id="cau-hoi">
+      <h2>Câu hỏi thường gặp</h2>
+      <p><b>Quên mật khẩu?</b> Liên hệ quản trị viên của trường để được đặt lại.</p>
+      <p><b>File của tôi bị từ chối?</b> Kiểm tra đuôi file có nằm trong danh sách cho phép, dung lượng không vượt giới hạn và file không bị đổi đuôi. File chạy được như .exe, .bat, .sh luôn bị chặn.</p>
+      <p><b>Giờ nộp tính theo đồng hồ nào?</b> Theo giờ máy chủ (GMT+7), không theo đồng hồ máy bạn.</p>
+    </section>
+  </div>
+  <aside class="card">
+    <h2>Mục lục</h2>
+    <nav class="toc" aria-label="Mục lục trợ giúp">
+      <a href="#hoc-vien">Dành cho học viên</a>
+      <a href="#giao-vien">Dành cho giáo viên</a>
+      <a href="#cau-hoi">Câu hỏi thường gặp</a>
+      <a href="{% url 'privacy' %}">Quyền riêng tư</a>
+    </nav>
+  </aside>
+</div>

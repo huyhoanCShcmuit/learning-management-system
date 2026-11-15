@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Đã nhập người dùng{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / <a href="{% url 'import_users' %}">Nhập người dùng</a> / Kết quả</div>
+<div class="page-head">
+  <div><h1>Đã nhập xong</h1><p>{{ created|length }} tài khoản mới · {{ enrolled }} lượt ghi danh mới · {{ skipped }} dòng lỗi bị bỏ qua.</p></div>
+  <div class="actions"><a class="btn ghost" href="{% url 'import_users' %}">Nhập file khác</a></div>
+</div>
+
+{% if created %}
+<div class="toast" style="background:var(--warn-soft);color:var(--warn)" role="alert">
+  <b>Mật khẩu tạm chỉ hiện một lần.</b> Hãy tải về ngay và phát riêng cho từng người. Khi rời trang này sẽ không xem lại được (quản trị viên có thể đặt lại mật khẩu nếu cần).
+</div>
+<section class="section">
+  <div class="section-head">
+    <h2>Tài khoản mới và mật khẩu tạm</h2>
+    <div class="actions"><button class="btn" id="dl-creds" type="button">{% include 'courses/_icons.html' with name='download' %} Tải về (CSV)</button></div>
+  </div>
+  <div class="card table-card"><div class="table-scroll">
+  <table id="creds">
+    <thead><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>Email</th><th>Mật khẩu tạm</th><th>Khoá</th></tr></thead>
+    <tbody>
+    {% for c in created %}
+    <tr><td>{{ c.username }}</td><td>{{ c.name }}</td><td>{{ c.email }}</td><td class="mono">{{ c.password }}</td><td>{{ c.courses }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div></div>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% load static %}<script src="{% static 'courses/creds.js' %}" defer></script>{% endblock %}

@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}Nhập người dùng{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / Nhập người dùng</div>
+<div class="page-head">
+  <div><h1>Nhập người dùng từ Excel</h1><p>Tạo nhiều tài khoản cùng lúc và ghi danh vào khoá học.</p></div>
+  <div class="actions"><a class="btn ghost" href="{% url 'import_template' %}">{% include 'courses/_icons.html' with name='download' %} Tải file mẫu</a></div>
+</div>
+
+{% if not items %}
+<div class="two">
+  <div class="card">
+    <h2>1. Chọn file</h2>
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+      <input type="hidden" name="action" value="preview">
+      <label class="drop" id="drop">
+        <span class="muted">{% include 'courses/_icons.html' with name='upload' %}</span>
+        <div><b>Kéo thả file .xlsx hoặc .csv</b> hoặc bấm để chọn</div>
+        <div class="small muted">Tối đa {{ max_rows }} dòng, 5 MB</div>
+        <div class="fname" id="fname"></div>
+        <input type="file" name="file" accept=".xlsx,.csv" required>
+      </label>
+      <div class="form-grid" style="margin-top:16px">
+        <p><label for="course">Ghi danh tất cả vào khoá (tuỳ chọn)</label>
+          <select id="course" name="course"><option value="">Không</option>
+            {% for c in courses %}<option value="{{ c.pk }}">{{ c.code }} · {{ c.name }}</option>{% endfor %}</select></p>
+        <p><label for="role">Vai trò khi cột Vai trò để trống</label>
+          <select id="role" name="role"><option value="student">Học viên</option><option value="teacher">Giáo viên</option></select></p>
+      </div>
+      <div class="form-actions"><button class="btn">Xem trước</button></div>
+    </form>
+  </div>
+  <aside class="card prose">
+    <h2>Định dạng file</h2>
+    <ul>
+      <li>Dòng đầu là tiêu đề cột: <b>Tên đăng nhập</b> (bắt buộc), Họ, Tên, Email, Vai trò, Mã khoá.</li>
+      <li>Vai trò: "học viên" hoặc "giáo viên".</li>
+      <li>Mã khoá: một hoặc nhiều mã, cách nhau bằng dấu phẩy.</li>
+      <li><b>Không ghi mật khẩu vào file.</b> Hệ thống tự tạo mật khẩu tạm; người dùng phải đổi ở lần đăng nhập đầu.</li>
+      <li>Người đã có tài khoản sẽ không bị thay đổi, chỉ được ghi danh thêm.</li>
+    </ul>
+  </aside>
+</div>
+{% else %}
+<div class="grid stats3" style="grid-template-columns:repeat(4,1fr)">
+  <div class="card stat-card"><div class="v">{{ summary.total }}</div><div class="l">dòng trong {{ file_name }}</div></div>
+  <div class="card stat-card"><div class="v" style="color:var(--ok)">{{ summary.new }}</div><div class="l">tài khoản mới</div></div>
+  <div class="card stat-card"><div class="v">{{ summary.existing }}</div><div class="l">đã có, chỉ ghi danh</div></div>
+  <div class="card stat-card"><div class="v" style="color:var(--bad)">{{ summary.error }}</div><div class="l">dòng lỗi, sẽ bỏ qua</div></div>
+</div>
+
+<section class="section">
+  <div class="section-head">
+    <h2>2. Kiểm tra trước khi tạo</h2>
+    <div class="actions">
+      <a class="btn ghost" href="{% url 'import_users' %}">Chọn file khác</a>
+      {% if summary.new or summary.existing %}
+      <form method="post" style="margin:0">{% csrf_token %}<input type="hidden" name="action" value="confirm">
+        <button class="btn">Xác nhận tạo {{ summary.new }} tài khoản</button></form>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card table-card"><div class="table-scroll">
+  <table>
+    <tr><th class="num">Dòng</th><th>Tên đăng nhập</th><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Khoá</th><th>Kết quả</th></tr>
+    {% for it in items %}
+    <tr>
+      <td class="num muted">{{ it.line }}</td>
+      <td><b>{{ it.username|default:"—" }}</b></td>
+      <td>{{ it.last_name }} {{ it.first_name }}</td>
+      <td class="small">{{ it.email|default:"—" }}</td>
+      <td>{% if it.role == 'teacher' %}Giáo viên{% else %}Học viên{% endif %}</td>
+      <td class="small">{{ it.course_codes|join:", "|default:"—" }}</td>
+      <td>{% if it.status == 'new' %}<span class="badge ok">Tạo mới</span>{% elif it.status == 'existing' %}<span class="badge info">Đã có</span>{% else %}<span class="badge bad">Lỗi</span><div class="small" style="color:var(--bad)">{{ it.errors|join:"; " }}</div>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div></div>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% load static %}<script src="{% static 'courses/upload.js' %}" defer></script>{% endblock %}

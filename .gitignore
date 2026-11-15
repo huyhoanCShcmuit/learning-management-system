@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Django local data (never commit)
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+uploads/
+staticfiles/
+media/
+secret_key
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.log

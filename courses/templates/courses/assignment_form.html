@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Tạo bài tập{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / <a href="{% url 'course_detail' course.pk %}">{{ course.code }}</a> / Tạo bài tập</div>
+<div class="page-head"><div><h1>Tạo bài tập</h1><p>{{ course.code }} · {{ course.name }}</p></div></div>
+<div class="card medium">
+  <form method="post">{% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="form-grid">
+      {% for f in form %}
+      <p class="{% if f.name == 'title' or f.name == 'description' or f.name == 'allowed_ext' %}full{% endif %}">
+        {{ f.label_tag }}{{ f }}
+        {% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}
+        {{ f.errors }}
+      </p>
+      {% endfor %}
+    </div>
+    <div class="form-actions"><button class="btn">Tạo bài tập</button><a class="btn ghost" href="{% url 'course_detail' course.pk %}">Huỷ</a></div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,4 @@
+{% extends 'base.html' %}
+{% block title %}Không tìm thấy trang{% endblock %}
+{% block content %}{% include '_error.html' with code='404' title='Không tìm thấy trang' msg='Trang bạn tìm không tồn tại hoặc đã bị xoá.' %}{% endblock %}
+{% block public %}<div class="auth-page"><div class="auth-box">{% include '_error.html' with code='404' title='Không tìm thấy trang' msg='Trang bạn tìm không tồn tại hoặc đã bị xoá.' %}</div></div>{% endblock %}

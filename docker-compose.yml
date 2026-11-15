@@ -1,0 +1,55 @@
+# One command: docker compose up -d --build
+# Settings and secrets come from .env (created by ./setup.sh, never committed).
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  web:
+    <<: *hardening
+    build: .
+    image: lms:latest
+    container_name: lms-web
+    env_file: .env
+    environment:
+      BEHIND_PROXY: "1"
+    expose:
+      - "8000"          # only reachable by Caddy, not from the host
+    read_only: true     # app code cannot be modified at runtime
+    tmpfs:
+      - /tmp
+    volumes:
+      - lms_data:/data  # SQLite DB, uploaded files, secret key
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/login/', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    <<: *hardening
+    image: caddy:2.10-alpine
+    container_name: lms-caddy
+    cap_add:
+      - NET_BIND_SERVICE
+    env_file: .env
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-8000}:80"
+      - "${HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  lms_data:
+  caddy_data:
+  caddy_config:

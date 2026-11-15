@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Cài đặt tài khoản{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / <a href="{% url 'profile' %}">Trang cá nhân</a> / Cài đặt</div>
+<div class="page-head"><div><h1>Cài đặt tài khoản</h1><p>Thông tin hiển thị cho giáo viên và bạn học trong khoá.</p></div></div>
+
+<div class="two">
+  <div class="card">
+    <h2>Thông tin cá nhân</h2>
+    <form method="post">{% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="form-grid">
+        {% for f in form %}<p class="{% if f.name == 'email' %}full{% endif %}">{{ f.label_tag }}{{ f }}{{ f.errors }}</p>{% endfor %}
+      </div>
+      <p class="small muted">Tên đăng nhập: <b>{{ user.username }}</b> (chỉ quản trị viên đổi được).</p>
+      <div class="form-actions"><button class="btn">Lưu thay đổi</button><a class="btn ghost" href="{% url 'profile' %}">Huỷ</a></div>
+    </form>
+  </div>
+  <aside class="card">
+    <h2>Bảo mật</h2>
+    <p class="small muted" style="margin-top:0">Dùng mật khẩu ít nhất 10 ký tự và không dùng lại mật khẩu của trang khác.</p>
+    <a class="btn ghost block" href="{% url 'password_change' %}">Đổi mật khẩu</a>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+<div class="crumb"><a href="{% url 'dashboard' %}">Trang chủ</a> / {{ course.code }}</div>
+<div class="course-head">
+  <div class="row" style="justify-content:space-between;align-items:flex-end">
+    <div>
+      <div class="code">{{ course.code }}</div>
+      <h1 style="margin:0">{{ course.name }}</h1>
+      {% if course.description %}<p class="muted" style="margin:2px 0 0">{{ course.description }}</p>{% endif %}
+    </div>
+    {% if role == 'teacher' %}
+    <div class="course-facts">
+      <div><b>{{ n_students }}</b><span>học viên</span></div>
+      <div><b>{{ n_assign }}</b><span>bài tập</span></div>
+    </div>
+    {% endif %}
+  </div>
+  <nav class="tabs">
+    <a href="{% url 'course_detail' course.pk %}" class="{% if tab == 'assign' %}on{% endif %}">Bài tập</a>
+    {% if role == 'teacher' %}
+      <a href="{% url 'course_members' course.pk %}" class="{% if tab == 'members' %}on{% endif %}">Thành viên</a>
+      <a href="{% url 'gradebook' course.pk %}" class="{% if tab == 'grades' %}on{% endif %}">Bảng điểm</a>
+    {% else %}
+      <a href="{% url 'member_progress' course.pk user.pk %}" class="{% if tab == 'grades' %}on{% endif %}">Điểm của tôi</a>
+    {% endif %}
+  </nav>
+</div>

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}Bảng điểm · {{ course.code }}{% endblock %}
+{% block content %}
+{% include 'courses/_course_header.html' %}
+
+<section class="section">
+  <div class="section-head">
+    <div class="small muted row" style="gap:12px">
+      <span><span class="cell graded">8.5</span> đã chấm</span>
+      <span><span class="cell submitted">nộp</span> chờ chấm</span>
+      <span><span class="cell late">trễ</span> nộp trễ</span>
+      <span><span class="cell overdue">quá hạn</span> còn nhận bài trễ</span>
+      <span><span class="cell missing">thiếu</span> đã đóng, chưa nộp</span>
+      <span><span class="cell pending">·</span> chưa đến hạn</span>
+    </div>
+    <div class="actions"><a class="btn ghost small" href="?format=csv">{% include 'courses/_icons.html' with name='download' %} Xuất CSV</a></div>
+  </div>
+
+  <div class="card table-card"><div class="table-scroll">
+  <table class="gb">
+    <tr>
+      <th class="sticky">Học viên</th>
+      {% for c in cols %}<th class="a num" title="{{ c.a.title }}"><a href="{% url 'assignment_detail' c.a.pk %}" style="color:inherit">{{ c.a.title|truncatechars:22 }}</a><div style="font-weight:400">/{{ c.a.max_score|floatformat:"-2" }}</div></th>{% endfor %}
+      <th class="num">Đã nộp</th><th class="num">TB %</th>
+    </tr>
+    {% for r in rows %}
+    <tr>
+      <td class="sticky"><a href="{% url 'member_progress' course.pk r.u.pk %}" style="color:var(--text);font-weight:600">{{ r.u.get_full_name|default:r.u.username }}</a>
+        <div class="muted small">{{ r.u.username }}</div></td>
+      {% for c in r.cells %}
+      <td class="num">
+        {% if c.s %}<a href="{% url 'assignment_detail' c.a.pk %}" style="text-decoration:none">{% endif %}<span class="cell {{ c.st }}">{% if c.st == 'graded' %}{{ c.s.score|floatformat:"-2" }}{% elif c.st == 'submitted' %}nộp{% elif c.st == 'late' %}trễ{% elif c.st == 'missing' %}thiếu{% elif c.st == 'overdue' %}quá hạn{% else %}·{% endif %}</span>{% if c.s %}</a>{% endif %}
+      </td>
+      {% endfor %}
+      <td class="num">{{ r.submitted }}/{{ n_assign }}</td>
+      <td class="num"><b>{% if r.avg is not None %}{{ r.avg }}{% else %}—{% endif %}</b></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="{{ cols|length|add:3 }}" class="empty">Khoá chưa có học viên.</td></tr>
+    {% endfor %}
+    {% if rows %}
+    <tr class="foot">
+      <td class="sticky">Cả lớp</td>
+      {% for c in cols %}<td class="num">{{ c.n }}/{{ n_students }} nộp{% if c.avg is not None %}<br>TB {{ c.avg|floatformat:"-2" }}{% endif %}</td>{% endfor %}
+      <td></td><td></td>
+    </tr>
+    {% endif %}
+  </table>
+  </div></div>
+</section>
+{% endblock %}
